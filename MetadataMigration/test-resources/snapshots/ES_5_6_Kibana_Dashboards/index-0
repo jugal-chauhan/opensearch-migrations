@@ -1,0 +1,1 @@
+{"snapshots":[{"name":"my_snapshot","uuid":"J03dArnvT0-AfHDzHbC_3Q","state":1}],"indices":{".kibana":{"id":"aBQgxmoBSziSZBXTjNCJWQ","snapshots":["J03dArnvT0-AfHDzHbC_3Q"]},"test_index":{"id":"5DcGTMrzTj2b_MjXc3YHiw","snapshots":["J03dArnvT0-AfHDzHbC_3Q"]}}}

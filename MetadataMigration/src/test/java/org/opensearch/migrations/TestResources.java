@@ -1,4 +1,4 @@
-package org.opensearch.migrations.bulkload.common;
+package org.opensearch.migrations;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;

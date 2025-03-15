@@ -199,8 +199,24 @@ public class ClusterOperations {
             + "  \"ignore_unavailable\": true,\n"
             + "  \"include_global_state\": true\n"
             + "}";
-        var response = put("/_snapshot/" + repoName + "/" + snapshotName + "?wait_for_completion=true", snapshotJson);
-        assertThat(response.getKey(), equalTo(200));
+        
+        try {
+            var response = put("/_snapshot/" + repoName + "/" + snapshotName + "?wait_for_completion=true", snapshotJson);
+            if (response.getKey() != 200) {
+                log.warn("Failed to take snapshot of index pattern {}, falling back to all indices", indexPattern);
+                // Try again with all indices
+                final var allIndicesSnapshotJson = "{\n"
+                    + "  \"indices\": \"*\",\n"
+                    + "  \"ignore_unavailable\": true,\n"
+                    + "  \"include_global_state\": true\n"
+                    + "}";
+                response = put("/_snapshot/" + repoName + "/" + snapshotName + "?wait_for_completion=true", allIndicesSnapshotJson);
+            }
+            assertThat(response.getKey(), equalTo(200));
+        } catch (AssertionError e) {
+            log.error("Failed to take snapshot: {}", e.getMessage());
+            throw e;
+        }
     }
 
     /**

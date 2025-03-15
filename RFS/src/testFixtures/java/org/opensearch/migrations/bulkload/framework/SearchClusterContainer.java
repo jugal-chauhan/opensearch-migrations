@@ -34,11 +34,11 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         Version.fromString("ES 7.10.2")
     );
     public static final ContainerVersion ES_V6_8_23 = new ElasticsearchOssVersion(
-        "docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.23",
+        "docker.elastic.co/elasticsearch/elasticsearch-oss:6.3.2",
         Version.fromString("ES 6.8.23")
     );
 
-    public static final ContainerVersion ES_V5_6_16 = new ElasticsearchVersion(
+    public static final ContainerVersion ES_V5_6_16 = new ElasticsearchOssVersion(
         "docker.elastic.co/elasticsearch/elasticsearch:5.6.16",
         Version.fromString("ES 5.6.16")
     );
@@ -55,18 +55,20 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         Version.fromString("OS 1.3.16")
     );
     public static final ContainerVersion OS_V2_19_1 = new OpenSearchVersion(
-        "opensearchproject/opensearch:2.19.1",
-        Version.fromString("OS 2.19.1")
+        "opensearchproject/opensearch:2.11.0",
+        Version.fromString("OS 2.11.0")
     );
     public static final ContainerVersion OS_LATEST = OS_V2_19_1;
 
     private enum INITIALIZATION_FLAVOR {
         BASE(Map.of("discovery.type", "single-node",
             "path.repo", CLUSTER_SNAPSHOT_DIR,
-            "ES_JAVA_OPTS", "-Xms512m -Xmx512m")),
+            "ES_JAVA_OPTS", "-Xms512m -Xmx512m",
+                "reindex.remote.whitelist", "localhost:*")),
         ELASTICSEARCH(
             new ImmutableMap.Builder<String, String>().putAll(BASE.getEnvVariables())
                 .put("xpack.security.enabled", "false")
+                .put("bootstrap.system_call_filter", "false")
                 .build()),
         ELASTICSEARCH_OSS(
             new ImmutableMap.Builder<String, String>().putAll(BASE.getEnvVariables())

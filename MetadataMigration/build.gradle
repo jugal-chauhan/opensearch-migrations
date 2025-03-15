@@ -13,6 +13,9 @@ dependencies {
     implementation group: 'org.jcommander', name: 'jcommander'
     implementation group: 'org.slf4j', name: 'slf4j-api'
     implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j2-impl'
+    implementation platform('io.projectreactor:reactor-bom:2023.0.5')
+    implementation 'io.projectreactor.netty:reactor-netty-core'
+    implementation 'io.projectreactor.netty:reactor-netty-http'
 
     testImplementation testFixtures(project(':RFS'))
     testImplementation testFixtures(project(':testHelperFixtures'))
@@ -25,6 +28,7 @@ dependencies {
     testImplementation group: 'org.hamcrest', name: 'hamcrest'
     testImplementation group: 'org.testcontainers', name: 'testcontainers'
     testImplementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind'
+    testImplementation group: 'io.projectreactor', name: 'reactor-test'
 
     testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine'
 }
