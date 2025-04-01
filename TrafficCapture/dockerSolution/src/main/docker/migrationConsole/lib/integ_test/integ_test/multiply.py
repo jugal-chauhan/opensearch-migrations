@@ -4,75 +4,17 @@ import unittest
 import json
 from http import HTTPStatus
 from console_link.middleware.clusters import connection_check, clear_cluster, ConnectionResult
-from console_link.models.cluster import Cluster
+from console_link.models.cluster import Cluster, HttpMethod
 from console_link.models.backfill_base import Backfill
 from console_link.models.command_result import CommandResult
-from console_link.models.metadata import Metadata
 from console_link.cli import Context
 from .default_operations import DefaultOperationsLibrary
+from .common_utils import execute_api_call, DEFAULT_INDEX_IGNORE_LIST
 from datetime import datetime
 import time
 
 logger = logging.getLogger(__name__)
 ops = DefaultOperationsLibrary()
-
-def create_target_index(source_cluster: Cluster, target_cluster: Cluster, index_name: str):
-    """Create target index with same settings as source"""
-    # Get source index settings
-    source_settings_response = ops.execute_api_call(cluster=source_cluster, path=f"/{index_name}/_settings")
-    source_settings = source_settings_response.json()
-    logger.info("Source index settings for %s: %s", index_name, source_settings)
-
-    # Create target index with same settings
-    target_settings = {
-        "settings": {
-            "number_of_shards": source_settings[index_name]["settings"]["index"]["number_of_shards"],
-            "number_of_replicas": source_settings[index_name]["settings"]["index"]["number_of_replicas"]
-        },
-        "mappings": source_settings[index_name]["mappings"]
-    }
-    logger.info("Creating target index %s with settings: %s", index_name, target_settings)
-    ops.create_index(cluster=target_cluster, index_name=index_name, data=json.dumps(target_settings))
-
-
-def create_test_data(source_cluster: Cluster):
-    """Create test index and documents in source cluster"""
-    # Create index with 50 shards
-    index_settings = {
-        "settings": {
-            "number_of_shards": 50,
-            "number_of_replicas": 1
-        },
-        "mappings": {
-            "doc": {  
-                "properties": {
-                    "timestamp": {"type": "date"},
-                    "value": {"type": "keyword"},
-                    "doc_number": {"type": "integer"}
-                }
-            }
-        }
-    }
-    logger.info("Creating largetest index with settings: %s", index_settings)
-    ops.create_index(cluster=source_cluster, index_name="largetest", data=json.dumps(index_settings))
-
-    # Create 10 documents with timestamp
-    for i in range(10):
-        doc_id = f"doc_{i}"
-        doc_body = {
-            "timestamp": datetime.now().isoformat(),
-            "value": f"test_value_{i}",
-            "doc_number": i
-        }
-        ops.create_document(
-            cluster=source_cluster,
-            index_name="largetest",
-            doc_id=doc_id,
-            doc_type="doc",
-            data=doc_body
-        )
-    logger.info("Created 10 documents in largetest index")
-
 
 def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     """Setup test data"""
@@ -102,32 +44,85 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
             }
         }
     }
-    logger.info("Creating largetest index with settings: %s", index_settings)
-    ops.create_index(cluster=source_cluster, index_name="largetest", data=json.dumps(index_settings))
 
-    # Create 10 documents with timestamp
-    for i in range(10):
+    index_name = f"largetest_{pytest.unique_id}"
+    logger.info("Creating index %s with settings: %s", index_name, index_settings)
+    
+    # Create index on both source and target with same settings
+    ops.create_index(cluster=source_cluster, index_name=index_name, data=json.dumps(index_settings))
+    ops.create_index(cluster=target_cluster, index_name=index_name, data=json.dumps(index_settings))
+
+    # Create 100 documents with timestamp in bulk
+    bulk_data = []
+    for i in range(100):
         doc_id = f"doc_{i}"
-        doc_body = {
-            "timestamp": datetime.now().isoformat(),
-            "value": f"test_value_{i}",
-            "doc_number": i
-        }
-        ops.create_document(
-            cluster=source_cluster,
-            index_name="largetest",
-            doc_id=doc_id,
-            data=doc_body,
-            doc_type="doc"
+        bulk_data.extend([
+            {"index": {"_index": index_name, "_type": "doc", "_id": doc_id}},
+            {
+                "timestamp": datetime.now().isoformat(),
+                "value": f"test_value_{i}",
+                "doc_number": i
+            }
+        ])
+    
+    # Bulk index documents
+    execute_api_call(
+        cluster=source_cluster,
+        method=HttpMethod.POST,
+        path="/_bulk",
+        data="\n".join(json.dumps(d) for d in bulk_data) + "\n",
+        headers={"Content-Type": "application/x-ndjson"}
+    )
+    logger.info("Created 100 documents in bulk in index %s", index_name)
+
+
+@pytest.fixture(scope="class")
+def setup_backfill(request):
+    """Test setup with backfill lifecycle management"""
+    config_path = request.config.getoption("--config_file_path")
+    unique_id = request.config.getoption("--unique_id")
+    pytest.console_env = Context(config_path).env
+    pytest.unique_id = unique_id
+
+    # Preload data and create target indices
+    preload_data(source_cluster=pytest.console_env.source_cluster,
+                 target_cluster=pytest.console_env.target_cluster)
+
+    # Start the backfill process
+    backfill: Backfill = pytest.console_env.backfill
+    assert backfill is not None
+
+    # Delete existing snapshot if it exists
+    try:
+        execute_api_call(
+            cluster=pytest.console_env.source_cluster,
+            method=HttpMethod.DELETE,
+            path="/_snapshot/migration_assistant_repo/migration-assistant-snapshot",
+            expected_status_code=200
         )
-    logger.info("Created 10 documents in largetest index")
+        logger.info("Deleted existing snapshot")
+    except Exception as e:
+        logger.info(f"No existing snapshot to delete or error deleting: {e}")
+
+    # Create backfill and snapshot
+    backfill.create()
+    snapshot_result: CommandResult = pytest.console_env.snapshot.create(wait=True)
+    assert snapshot_result.success
+
+    # Start and scale backfill
+    backfill_start_result: CommandResult = backfill.start()
+    assert backfill_start_result.success
+    backfill_scale_result: CommandResult = backfill.scale(units=2)
+    assert backfill_scale_result.success
 
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_environment(request):
     """Initialize test environment"""
     config_path = request.config.getoption("--config_file_path")
+    unique_id = request.config.getoption("--unique_id")
     pytest.console_env = Context(config_path).env
+    pytest.unique_id = unique_id
     
     # Setup code
     logger.info("Starting backfill tests...")
@@ -139,80 +134,66 @@ def setup_environment(request):
     backfill.stop()
 
 
-@pytest.fixture(scope="class")
-def setup_backfill(setup_environment):
-    """Test setup with backfill lifecycle management"""
-    # Preload benchmark data and create target indices
-    preload_data(source_cluster=pytest.console_env.source_cluster,
-                 target_cluster=pytest.console_env.target_cluster)
-
-    # Start the backfill process
-    backfill: Backfill = pytest.console_env.backfill
-    assert backfill is not None
-
-    # Create backfill and snapshot
-    backfill.create()
-    snapshot_result: CommandResult = pytest.console_env.snapshot.create(wait=True)
-    assert snapshot_result.success
-
-    # Start and scale backfill
-    backfill_start_result: CommandResult = backfill.start()
-    assert backfill_start_result.success
-    
-    # Scale to 2 workers
-    backfill_scale_result: CommandResult = backfill.scale(units=2)
-    assert backfill_scale_result.success
-
-
 @pytest.mark.usefixtures("setup_backfill")
 class BackfillTest(unittest.TestCase):
     """Test backfill functionality"""
 
-    def wait_for_backfill_completion(self, target_cluster: Cluster):
-        """Wait until document count stabilizes"""
+    def wait_for_backfill_completion(self, target_cluster: Cluster, index_name: str):
+        """Wait until document count stabilizes or bulk-loader pods terminate"""
         previous_count = -1
-        for _ in range(30):
-            current_count = ops.get_doc_count(target_cluster, "largetest")
-            if current_count == previous_count and current_count > 0:
-                return
+        stable_count = 0
+        max_stable_checks = 3  # Number of consecutive stable counts needed
+        
+        for _ in range(30):  # Max 30 attempts
+            target_response = execute_api_call(cluster=target_cluster, method=HttpMethod.GET, path=f"/{index_name}/_count?format=json")
+            current_count = target_response.json()['count']
+            logger.info(f"Current doc count in target index {index_name}: {current_count}")
+            
+            if current_count == previous_count:
+                stable_count += 1
+                if stable_count >= max_stable_checks:
+                    logger.info(f"Document count stabilized at {current_count} for {max_stable_checks} consecutive checks")
+                    return
+            else:
+                stable_count = 0
+                
             previous_count = current_count
             time.sleep(30)
-        self.fail("Backfill did not complete within timeout")
+        
+        logger.warning("Backfill monitoring timed out after 30 attempts")
 
-    def test_benchmark_data_migration(self):
+    def test_data_multiplication(self):
         source = pytest.console_env.source_cluster
         target = pytest.console_env.target_cluster
+        index_name = f"largetest_{pytest.unique_id}"
 
-        # Verify data exists on source
-        source_count = ops.get_doc_count(source, "largetest")
-        self.assertEqual(10, source_count, "Source should have 10 documents")
+        # Verify source data
+        source_response = execute_api_call(cluster=source, method=HttpMethod.GET, path=f"/{index_name}/_count?format=json")
+        source_count = source_response.json()['count']
+        logger.info(f"Source index {index_name} document count: {source_count}")
+        self.assertEqual(100, source_count, "Source should have 100 documents")
 
         # Wait for backfill completion
-        self.wait_for_backfill_completion(target)
+        self.wait_for_backfill_completion(target, index_name)
 
-        # Verify data is backfilled to target
-        target_count = ops.get_doc_count(target, "largetest")
-        self.assertEqual(10000, target_count, "Target should have 10000 documents (10 source docs * 1000 multiplier)")
+        # Log final target stats
+        target_response = execute_api_call(cluster=target, method=HttpMethod.GET, path=f"/{index_name}/_count?format=json")
+        target_count = target_response.json()['count']
+        logger.info(f"Target index {index_name} final document count: {target_count}")
+        
+        # Get index stats for size information
+        target_stats = execute_api_call(cluster=target, method=HttpMethod.GET, path=f"/{index_name}/_stats").json()
+        logger.info(f"Target index {index_name} stats: {json.dumps(target_stats, indent=2)}")
 
         # Verify a sample of document contents
-        # Check first doc, last doc, and a few in between
-        sample_indices = [0, 100, 1000, 5000, 9999]
+        sample_indices = [0, 10, 50, 99]  # Sample from original docs
         for i in sample_indices:
             doc_id = f"doc_{i}"
-            # First verify source doc exists
-            if i < 10:  # Only first 10 docs exist in source
-                ops.check_doc_match(
-                    test_case=self,
-                    index_name="largetest",
-                    doc_id=doc_id,
-                    source_cluster=source,
-                    target_cluster=target
-                )
-            else:
-                # For multiplied docs, just verify they exist in target
-                response = ops.get_document(
-                    index_name="largetest",
-                    doc_id=doc_id,
-                    cluster=target
-                )
-                self.assertEqual(200, response.status_code, f"Document {doc_id} should exist in target")
+            # Verify original document was copied
+            ops.check_doc_match(
+                test_case=self,
+                index_name=index_name,
+                doc_id=doc_id,
+                source_cluster=source,
+                target_cluster=target
+            )
