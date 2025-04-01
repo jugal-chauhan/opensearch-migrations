@@ -190,11 +190,28 @@ class Cluster:
         elif self.auth_type == AuthMethod.SIGV4:
             raise NotImplementedError(f"Auth type {self.auth_type} is not currently support for executing "
                                       f"benchmark workloads")
-        # Note -- we should censor the password when logging this command
+        
+        # Use the correct distribution version based on cluster version
+        if not self.version:
+            # Get cluster version if not set
+            response = self.call_api("/")
+            self.version = response.json()['version']['number']
+        
+        distribution_version = self.version
+        if distribution_version.startswith("5."):
+            # For ES 5.x, use the exact version for benchmarking and adjust parameters
+            logger.info(f"Using Elasticsearch {distribution_version} for benchmarking")
+            # Reduce bulk size and client counts for ES 5.x to prevent overload
+            workload_params = 'target_throughput:0.2,bulk_size:5,bulk_indexing_clients:1,search_clients:1'
+        else:
+            # For newer versions, use OpenSearch 1.0.0
+            distribution_version = "1.0.0"
+            logger.info(f"Using OpenSearch {distribution_version} for benchmarking")
+
         # Fix commit used for OSB on latest verified working commit
         workload_revision = "fc64258a9b2ed2451423d7758ca1c5880626c520"
         logger.info(f"Running opensearch-benchmark with '{workload}' workload and revision '{workload_revision}'")
-        command = (f"opensearch-benchmark execute-test --distribution-version=1.0.0 "
+        command = (f"opensearch-benchmark execute-test --distribution-version={distribution_version} "
                    f"--exclude-tasks=check-cluster-health "
                    f"--workload-revision={workload_revision} "
                    f"--target-host={self.endpoint} "
@@ -207,7 +224,13 @@ class Cluster:
         # e.g. username:admin,password:admin.
         display_command = command.replace(f"basic_auth_password:{password_to_censor}", "basic_auth_password:********")
         logger.info(f"Executing command: {display_command}")
-        subprocess.run(command, shell=True)
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"Benchmark command failed with exit code {result.returncode}")
+            logger.error(f"stdout: {result.stdout}")
+            logger.error(f"stderr: {result.stderr}")
+            raise RuntimeError(f"Benchmark command failed: {result.stderr}")
+        logger.info(f"Benchmark command succeeded: {result.stdout}")
 
     def fetch_all_documents(self, index_name: str, batch_size: int = 100) -> Generator[Dict[str, Any], None, None]:
         """

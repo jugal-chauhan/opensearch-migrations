@@ -22,8 +22,10 @@ class DefaultOperationsLibrary:
     exist.
     """
 
-    def create_index(self, index_name: str, cluster: Cluster, **kwargs):
+    def create_index(self, index_name: str, cluster: Cluster, body: dict = None, **kwargs):
         headers = {'Content-Type': 'application/json'}
+        if body:
+            kwargs['data'] = json.dumps(body)
         return execute_api_call(cluster=cluster, method=HttpMethod.PUT, path=f"/{index_name}",
                                 headers=headers, **kwargs)
 
@@ -35,7 +37,7 @@ class DefaultOperationsLibrary:
         return execute_api_call(cluster=cluster, method=HttpMethod.DELETE, path=f"/{index_name}",
                                 **kwargs)
 
-    def create_document(self, index_name: str, doc_id: str, cluster: Cluster, data: dict = None, doc_type="_doc",
+    def create_document(self, index_name: str, doc_id: str, cluster: Cluster, data: dict = None, doc_type="doc",
                         **kwargs):
         if data is None:
             data = {
@@ -47,18 +49,19 @@ class DefaultOperationsLibrary:
                                 data=json.dumps(data), headers=headers, **kwargs)
 
     def create_and_retrieve_document(self, index_name: str, doc_id: str, cluster: Cluster, data: dict = None,
-                                     doc_type="_doc", **kwargs):
+                                     doc_type="doc", **kwargs):
         self.create_document(index_name=index_name, doc_id=doc_id, cluster=cluster, data=data, doc_type=doc_type,
                              **kwargs)
         headers = {'Content-Type': 'application/json'}
         self.get_document(index_name=index_name, doc_id=doc_id, cluster=cluster, data=data, doc_type=doc_type,
                           headers=headers, **kwargs)
 
-    def get_document(self, index_name: str, doc_id: str, cluster: Cluster, doc_type="_doc", **kwargs):
+    def get_document(self, index_name: str, doc_id: str, cluster: Cluster, doc_type: str = "doc", **kwargs):
+        """Get document by id"""
         return execute_api_call(cluster=cluster, method=HttpMethod.GET, path=f"/{index_name}/{doc_type}/{doc_id}",
                                 **kwargs)
 
-    def delete_document(self, index_name: str, doc_id: str, cluster: Cluster, doc_type="_doc", **kwargs):
+    def delete_document(self, index_name: str, doc_id: str, cluster: Cluster, doc_type="doc", **kwargs):
         return execute_api_call(cluster=cluster, method=HttpMethod.DELETE, path=f"/{index_name}/{doc_type}/{doc_id}",
                                 **kwargs)
 
@@ -104,6 +107,11 @@ class DefaultOperationsLibrary:
                 index_dict[index_name] = count_response.json()
                 index_dict[index_name]['index'] = index_name
         return index_dict
+
+    def get_doc_count(self, cluster: Cluster, index_name: str) -> int:
+        """Get document count for an index"""
+        response = execute_api_call(cluster=cluster, path=f"/{index_name}/_count?format=json")
+        return response.json()['count']
 
     def check_doc_counts_match(self, cluster: Cluster,
                                expected_index_details: Dict[str, Dict[str, str]],
@@ -171,6 +179,11 @@ class DefaultOperationsLibrary:
             os.makedirs(directory, exist_ok=True)
         with open(file_path_to_create, "w") as file:
             json.dump(transform_config_data, file, indent=4)
+
+    def get_index_settings(self, cluster: Cluster, index_name: str, **kwargs):
+        """Get settings for a specific index"""
+        response = execute_api_call(cluster=cluster, method=HttpMethod.GET, path=f"/{index_name}/_settings", **kwargs)
+        return response.json()
 
     def convert_transformations_to_str(self, transform_list: List[Dict]) -> str:
         return json.dumps(transform_list)

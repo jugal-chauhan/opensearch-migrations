@@ -15,6 +15,8 @@ elasticsearch:
     elasticsearch.yml: |
       bootstrap.system_call_filter: false
       xpack.security.enabled: false
+      xpack.monitoring.enabled: false
+      xpack.ml.enabled: false
       network.host: 0.0.0.0
       discovery.zen.minimum_master_nodes: 1
   extraEnvs:
@@ -22,3 +24,7 @@ elasticsearch:
       value: ""
     - name: "node.roles" # Replace this setting that is added by chart with "" since this setting is not supported in ES 5.x
       value: ""
+  extraVolumes:
+  extraVolumeMounts:
+  persistence:
+    enabled: false
