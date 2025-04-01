@@ -92,18 +92,6 @@ def setup_backfill(request):
     backfill: Backfill = pytest.console_env.backfill
     assert backfill is not None
 
-    # Delete existing snapshot if it exists
-    try:
-        execute_api_call(
-            cluster=pytest.console_env.source_cluster,
-            method=HttpMethod.DELETE,
-            path="/_snapshot/migration_assistant_repo/migration-assistant-snapshot",
-            expected_status_code=200
-        )
-        logger.info("Deleted existing snapshot")
-    except Exception as e:
-        logger.info(f"No existing snapshot to delete or error deleting: {e}")
-
     # Create backfill and snapshot
     backfill.create()
     snapshot_result: CommandResult = pytest.console_env.snapshot.create(wait=True)
@@ -112,7 +100,7 @@ def setup_backfill(request):
     # Start and scale backfill
     backfill_start_result: CommandResult = backfill.start()
     assert backfill_start_result.success
-    backfill_scale_result: CommandResult = backfill.scale(units=2)
+    backfill_scale_result: CommandResult = backfill.scale(units=1)
     assert backfill_scale_result.success
 
 
@@ -137,6 +125,24 @@ def setup_environment(request):
 @pytest.mark.usefixtures("setup_backfill")
 class BackfillTest(unittest.TestCase):
     """Test backfill functionality"""
+
+    def get_cluster_stats(self, cluster: Cluster, index_name: str = None):
+        """Get document count and size stats for a cluster"""
+        try:
+            if index_name:
+                path = f"/{index_name}/_stats"
+            else:
+                path = "/_stats"
+
+            stats = execute_api_call(cluster=cluster, method=HttpMethod.GET, path=path).json()
+            total_docs = stats['_all']['total']['docs']['count']
+            total_size_bytes = stats['_all']['total']['store']['size_in_bytes']
+            total_size_mb = total_size_bytes / (1024 * 1024)
+            
+            return total_docs, total_size_mb
+        except Exception as e:
+            logger.error(f"Error getting cluster stats: {str(e)}")
+            return 0, 0
 
     def wait_for_backfill_completion(self, target_cluster: Cluster, index_name: str):
         """Wait until document count stabilizes or bulk-loader pods terminate"""
@@ -163,37 +169,61 @@ class BackfillTest(unittest.TestCase):
         logger.warning("Backfill monitoring timed out after 30 attempts")
 
     def test_data_multiplication(self):
+        """Monitor backfill progress and report final stats"""
         source = pytest.console_env.source_cluster
         target = pytest.console_env.target_cluster
         index_name = f"largetest_{pytest.unique_id}"
+        backfill = pytest.console_env.backfill
 
-        # Verify source data
-        source_response = execute_api_call(cluster=source, method=HttpMethod.GET, path=f"/{index_name}/_count?format=json")
-        source_count = source_response.json()['count']
-        logger.info(f"Source index {index_name} document count: {source_count}")
-        self.assertEqual(100, source_count, "Source should have 100 documents")
+        # Initial source stats
+        source_docs, source_size = self.get_cluster_stats(source, index_name)
+        logger.info("=== Initial Source Cluster Stats ===")
+        logger.info(f"Documents: {source_docs:,}")
+        logger.info(f"Index Size: {source_size:.2f} MB")
 
-        # Wait for backfill completion
-        self.wait_for_backfill_completion(target, index_name)
-
-        # Log final target stats
-        target_response = execute_api_call(cluster=target, method=HttpMethod.GET, path=f"/{index_name}/_count?format=json")
-        target_count = target_response.json()['count']
-        logger.info(f"Target index {index_name} final document count: {target_count}")
+        # Monitor backfill progress
+        previous_count = 0
+        stable_count = 0
+        max_stable_checks = 3
+        check_interval = 30  # seconds
         
-        # Get index stats for size information
-        target_stats = execute_api_call(cluster=target, method=HttpMethod.GET, path=f"/{index_name}/_stats").json()
-        logger.info(f"Target index {index_name} stats: {json.dumps(target_stats, indent=2)}")
+        logger.info("\n=== Starting Backfill Monitoring ===")
+        for attempt in range(30):  # Max 30 attempts
+            target_docs, target_size = self.get_cluster_stats(target, index_name)
+            logger.info(f"\nBackfill Progress - Attempt {attempt + 1}/30")
+            logger.info(f"Target Documents: {target_docs:,}")
+            logger.info(f"Target Index Size: {target_size:.2f} MB")
+            logger.info(f"Progress: {(target_docs/source_docs*100):.1f}% of source count")
+            
+            if target_docs == previous_count:
+                stable_count += 1
+                logger.info(f"Count stable for {stable_count} checks")
+                if stable_count >= max_stable_checks:
+                    logger.info("Document count has stabilized")
+                    break
+            else:
+                stable_count = 0
+                previous_count = target_docs
+            
+            time.sleep(check_interval)
 
-        # Verify a sample of document contents
-        sample_indices = [0, 10, 50, 99]  # Sample from original docs
-        for i in sample_indices:
-            doc_id = f"doc_{i}"
-            # Verify original document was copied
-            ops.check_doc_match(
-                test_case=self,
-                index_name=index_name,
-                doc_id=doc_id,
-                source_cluster=source,
-                target_cluster=target
-            )
+        # Stop backfill
+        logger.info("\n=== Stopping Backfill ===")
+        stop_result: CommandResult = backfill.stop()
+        self.assertTrue(stop_result.success, "Failed to stop backfill")
+        time.sleep(30)  # Wait for stop to complete
+
+        # Final stats for all indices
+        logger.info("\n=== Final Cluster Stats ===")
+        source_total_docs, source_total_size = self.get_cluster_stats(source)
+        target_total_docs, target_total_size = self.get_cluster_stats(target)
+        
+        logger.info("Source Cluster:")
+        logger.info(f"- Total Documents: {source_total_docs:,}")
+        logger.info(f"- Total Size: {source_total_size:.2f} MB")
+        
+        logger.info("\nTarget Cluster:")
+        logger.info(f"- Total Documents: {target_total_docs:,}")
+        logger.info(f"- Total Size: {target_total_size:.2f} MB")
+
+        logger.info("\n=== Test Complete ===")

@@ -151,9 +151,9 @@ class DefaultOperationsLibrary:
         test_case.fail(error_message)
 
     def check_doc_match(self, test_case: TestCase, index_name: str, doc_id: str, source_cluster: Cluster,
-                        target_cluster: Cluster):
-        source_response = self.get_document(index_name=index_name, doc_id=doc_id, cluster=source_cluster)
-        target_response = self.get_document(index_name=index_name, doc_id=doc_id, cluster=target_cluster)
+                        target_cluster: Cluster, doc_type: str = "doc"):
+        source_response = self.get_document(index_name=index_name, doc_id=doc_id, cluster=source_cluster, doc_type=doc_type)
+        target_response = self.get_document(index_name=index_name, doc_id=doc_id, cluster=target_cluster, doc_type=doc_type)
 
         source_document = source_response.json()
         source_content = source_document['_source']

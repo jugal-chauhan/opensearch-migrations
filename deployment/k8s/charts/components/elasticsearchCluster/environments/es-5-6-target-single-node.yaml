@@ -3,7 +3,7 @@ elasticsearch:
   imageTag: "5.6.16"
   image: "docker.elastic.co/elasticsearch/elasticsearch"
   antiAffinity: "soft"
-  esJavaOpts: "-Xmx128m -Xms128m"
+  esJavaOpts: "-Xmx2g -Xms2g"
   protocol: http
   replicas: 1 # Set replicas to the number of nodes you want in the cluster
   createCert: false
@@ -11,6 +11,13 @@ elasticsearch:
   readinessProbe:
     failureThreshold: 5
     successThreshold: 2
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "2"
+    limits:
+      memory: "5Gi"
+      cpu: "3"
   esConfig:
     elasticsearch.yml: |
       bootstrap.system_call_filter: false
@@ -19,6 +26,17 @@ elasticsearch:
       xpack.ml.enabled: false
       network.host: 0.0.0.0
       discovery.zen.minimum_master_nodes: 1
+      
+      # Bulk indexing optimizations
+      indices.memory.index_buffer_size: 30%
+      thread_pool.bulk.queue_size: 1000
+      thread_pool.bulk.size: 4
+      indices.recovery.max_bytes_per_sec: 100mb
+      
+      # Circuit breaker settings
+      indices.breaker.total.limit: 70%
+      indices.breaker.request.limit: 60%
+      indices.breaker.fielddata.limit: 60%
   extraEnvs:
     - name: "cluster.initial_master_nodes" # Replace this setting that is added by chart with "" since this setting is not supported in ES 5.x
       value: ""
