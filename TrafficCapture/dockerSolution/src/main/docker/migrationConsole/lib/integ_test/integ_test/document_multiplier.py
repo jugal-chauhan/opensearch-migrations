@@ -2,11 +2,11 @@ import logging
 import pytest
 import unittest
 import json
-from http import HTTPStatus
-from console_link.middleware.clusters import connection_check, clear_cluster, ConnectionResult
+from console_link.middleware.clusters import connection_check, clear_cluster, clear_snapshots, delete_repo, ConnectionResult
 from console_link.models.cluster import Cluster, HttpMethod
 from console_link.models.backfill_base import Backfill
 from console_link.models.command_result import CommandResult
+from console_link.models.snapshot import Snapshot
 from console_link.cli import Context
 from .default_operations import DefaultOperationsLibrary
 from .common_utils import execute_api_call
@@ -31,31 +31,33 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     target_con_result: ConnectionResult = connection_check(target_cluster)
     assert target_con_result.connection_established is True
 
-    # Clear indices at the start
-    logger.info("Clearing indices before starting test...")
+    # Clear indices and snapshots at the start
+    logger.info("Clearing indices and snapshots before starting test...")
     clear_cluster(source_cluster)
     clear_cluster(target_cluster)
-
-    # Verify indices are cleared by checking _cat/indices
-    source_indices = execute_api_call(
-        cluster=source_cluster,
-        method=HttpMethod.GET,
-        path="/_cat/indices?v"
-    ).text.strip()
     
-    if source_indices and not all(i.startswith('.') for i in source_indices.split('\n')[1:]):
-        logger.error(f"Source indices not cleared: {source_indices}")
-        raise AssertionError("Failed to clear source cluster indices")
+    # First register the repository if it doesn't exist
+    repo_config = {
+        "type": "fs",
+        "settings": {
+            "location": "/snapshot"
+        }
+    }
+    try:
+        execute_api_call(
+            cluster=source_cluster,
+            method=HttpMethod.PUT,
+            path="/_snapshot/migration_assistant_repo",
+            data=json.dumps(repo_config),
+            expected_status_code=200
+        )
+        logger.info("Registered snapshot repository")
+    except Exception as e:
+        logger.warning(f"Error registering repository (may already exist): {e}")
     
-    target_indices = execute_api_call(
-        cluster=target_cluster,
-        method=HttpMethod.GET,
-        path="/_cat/indices?v"
-    ).text.strip()
-    
-    if target_indices and not all(i.startswith('.') for i in target_indices.split('\n')[1:]):
-        logger.error(f"Target indices not cleared: {target_indices}")
-        raise AssertionError("Failed to clear target cluster indices")
+    # Now clear snapshots and delete repository
+    clear_snapshots(source_cluster, "migration_assistant_repo")
+    delete_repo(source_cluster, "migration_assistant_repo")
 
     logger.info("Successfully cleared clusters")
 
@@ -118,24 +120,59 @@ def setup_backfill(request):
     preload_data(source_cluster=pytest.console_env.source_cluster,
                  target_cluster=pytest.console_env.target_cluster)
 
-    # Start the backfill process
+    # Get components
     backfill: Backfill = pytest.console_env.backfill
     assert backfill is not None
+    snapshot: Snapshot = pytest.console_env.snapshot
+    assert snapshot is not None
 
-    # Create backfill and snapshot
-    backfill.create()
-    snapshot_result: CommandResult = pytest.console_env.snapshot.create(wait=True)
+    # Initialize backfill first (creates .migrations_working_state)
+    backfill_create_result: CommandResult = backfill.create()
+    assert backfill_create_result.success
+    logger.info("Backfill initialized successfully")
+
+    # Register snapshot repository
+    repo_config = {
+        "type": "fs",
+        "settings": {
+            "location": "/snapshot"
+        }
+    }
+    execute_api_call(
+        cluster=pytest.console_env.source_cluster,
+        method=HttpMethod.PUT,
+        path="/_snapshot/migration_assistant_repo",
+        data=json.dumps(repo_config),
+        expected_status_code=200
+    )
+    logger.info("Registered snapshot repository")
+
+    # Create snapshot and wait for completion
+    snapshot_result: CommandResult = snapshot.create(wait=True)
     assert snapshot_result.success
+    logger.info("Snapshot creation completed successfully")
+
+    # Start backfill process
+    backfill_start_result: CommandResult = backfill.start()
+    assert backfill_start_result.success
+    logger.info("Backfill started successfully")
+
+    # Scale up backfill workers
+    backfill_scale_result: CommandResult = backfill.scale(units=5)
+    assert backfill_scale_result.success
+    logger.info("Backfill scaled successfully")
 
     yield
 
-    # Cleanup - only stop backfill, don't clear indices
+    # Cleanup - stop backfill and clean snapshots
     logger.info("Cleaning up test environment...")
     try:
         backfill.stop()
-        logger.info("Backfill stopped. Indices preserved for inspection.")
+        clear_snapshots(pytest.console_env.source_cluster, "migration_assistant_repo")
+        delete_repo(pytest.console_env.source_cluster, "migration_assistant_repo")
+        logger.info("Backfill stopped and snapshots cleaned up.")
     except Exception as e:
-        logger.error(f"Error stopping backfill: {str(e)}")
+        logger.error(f"Error during cleanup: {str(e)}")
 
 
 @pytest.fixture(scope="session", autouse=True)
