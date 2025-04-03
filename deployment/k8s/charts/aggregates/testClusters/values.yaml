@@ -1,7 +1,7 @@
 conditionalPackageInstalls:
   proxy: false
   source: true
-  target: true
+  target: false
 
 proxy:
   parameters:
