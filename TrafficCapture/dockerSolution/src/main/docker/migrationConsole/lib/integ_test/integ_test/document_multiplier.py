@@ -12,6 +12,7 @@ from .default_operations import DefaultOperationsLibrary
 from .common_utils import execute_api_call
 from datetime import datetime
 import time
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -35,31 +36,25 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     logger.info("Clearing indices and snapshots before starting test...")
     clear_cluster(source_cluster)
     clear_cluster(target_cluster)
-    
-    # First register the repository if it doesn't exist
-    repo_config = {
-        "type": "fs",
-        "settings": {
-            "location": "/snapshot"
-        }
-    }
-    try:
-        execute_api_call(
-            cluster=source_cluster,
-            method=HttpMethod.PUT,
-            path="/_snapshot/migration_assistant_repo",
-            data=json.dumps(repo_config),
-            expected_status_code=200
-        )
-        logger.info("Registered snapshot repository")
-    except Exception as e:
-        logger.warning(f"Error registering repository (may already exist): {e}")
-    
-    # Now clear snapshots and delete repository
-    clear_snapshots(source_cluster, "migration_assistant_repo")
-    delete_repo(source_cluster, "migration_assistant_repo")
 
-    logger.info("Successfully cleared clusters")
+        # Cleanup generated transformation files
+    try:
+        shutil.rmtree("/shared-logs-output/test-transformations")
+        logger.info("Removed existing /shared-logs-output/test-transformations directory")
+    except FileNotFoundError:
+        logger.info("No transformation files detected to cleanup")
+
+    # Create transformation.json file
+    # with open(ops.get_project_root() + "/integ_test/transformation.json", "r") as f:
+    transform_config_data = [
+        {
+        "JsonJSTransformerProvider": {
+            "initializationScript": "function mapToPlainObjectReplacer(key, value) { if (value instanceof Map) { return Object.fromEntries(value); } return value; } function transform(document, context) { if (!document) { throw new Error(\"No source_document was defined - nothing to transform!\"); } const indexCommandMap = document.get(\"index\"); const sourceDocumentMap = document.get(\"source\"); const baseId = indexCommandMap.get(\"_id\"); const baseDocNum = parseInt(baseId.split('_')[1]); const results = []; const N = 9999; for (let i = 0; i <= N; i++) { const newIndexMap = new Map(indexCommandMap); const newId = `doc_${baseDocNum}${i.toString().padStart(4, '0')}`; newIndexMap.set(\"_id\", newId); newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const newSourceMap = new Map(sourceDocumentMap); newSourceMap.set(\"doc_number\", baseDocNum * 10000 + i); results.push(new Map([ [\"index\", newIndexMap], [\"source\", newSourceMap] ])); } return results; } function main(context) { console.log(\"Context: \", JSON.stringify(context, mapToPlainObjectReplacer, 2)); return (document) => { if (Array.isArray(document)) { return document.flatMap(item => transform(item, context)); } return transform(document, context); }; } (() => main)()",
+            "bindingsObject": "{}"
+            }
+        }
+    ]
+    ops.create_transformation_json_file(json.dumps(transform_config_data), "/shared-logs-output/test-transformations/transformation.json")
 
     # Create source index with settings
     index_settings = {
@@ -84,30 +79,40 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     
     # Create index on both source and target with same settings
     ops.create_index_es56(cluster=source_cluster, index_name=index_name_source, data=json.dumps(index_settings))
-    ops.create_index_es56(cluster=target_cluster, index_name=index_name_target, data=json.dumps(index_settings))
+    ops.create_index_es56(cluster=source_cluster, index_name=index_name_target, data=json.dumps(index_settings))
 
     # Create 100 documents with timestamp in bulk
-    bulk_data = []
-    for i in range(100):
-        doc_id = f"doc_{i}"
-        bulk_data.extend([
-            {"index": {"_index": index_name_source, "_type": "doc", "_id": doc_id}},
-            {
-                "timestamp": datetime.now().isoformat(),
-                "value": f"test_value_{i}",
-                "doc_number": i
-            }
-        ])
+    for j in range(10):
+        bulk_data = []
+        for i in range(200000):
+            doc_id = f"doc_{j}_{i}"
+            bulk_data.extend([
+                {"index": {"_index": index_name_source, "_type": "doc", "_id": doc_id}},
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "value": f"test_value_{i}",
+                    "doc_number": i
+                }
+            ])
+        execute_api_call(
+            cluster=source_cluster,
+            method=HttpMethod.POST,
+            path="/_bulk",
+            data="\n".join(json.dumps(d) for d in bulk_data) + "\n",
+            headers={"Content-Type": "application/x-ndjson"}
+        )
     
     # Bulk index documents
+    
+
     execute_api_call(
         cluster=source_cluster,
         method=HttpMethod.POST,
-        path="/_bulk",
-        data="\n".join(json.dumps(d) for d in bulk_data) + "\n",
-        headers={"Content-Type": "application/x-ndjson"}
+        path="/_refresh"
     )
+
     logger.info("Created 100 documents in bulk in index %s", index_name_source)
+
 
 
 @pytest.fixture(scope="class")
@@ -131,22 +136,6 @@ def setup_backfill(request):
     assert backfill_create_result.success
     logger.info("Backfill initialized successfully")
 
-    # Register snapshot repository
-    repo_config = {
-        "type": "fs",
-        "settings": {
-            "location": "/snapshot"
-        }
-    }
-    execute_api_call(
-        cluster=pytest.console_env.source_cluster,
-        method=HttpMethod.PUT,
-        path="/_snapshot/migration_assistant_repo",
-        data=json.dumps(repo_config),
-        expected_status_code=200
-    )
-    logger.info("Registered snapshot repository")
-
     # Create snapshot and wait for completion
     snapshot_result: CommandResult = snapshot.create(wait=True)
     assert snapshot_result.success
@@ -158,7 +147,7 @@ def setup_backfill(request):
     logger.info("Backfill started successfully")
 
     # Scale up backfill workers
-    backfill_scale_result: CommandResult = backfill.scale(units=5)
+    backfill_scale_result: CommandResult = backfill.scale(5)
     assert backfill_scale_result.success
     logger.info("Backfill scaled successfully")
 
@@ -217,7 +206,7 @@ class BackfillTest(unittest.TestCase):
         stable_count = 0
         max_stable_checks = 2  # Reduced from 3 to 2 consecutive stable counts needed
         
-        for attempt in range(30):  # Max 30 attempts
+        for attempt in range(80):  # Max 30 attempts
             target_response = execute_api_call(cluster=target_cluster, method=HttpMethod.GET, path=f"/{index_name_target}/_count?format=json")
             current_count = target_response.json()['count']
             
