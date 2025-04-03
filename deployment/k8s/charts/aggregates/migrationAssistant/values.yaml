@@ -2,11 +2,11 @@ conditionalPackageInstalls:
   bulkLoader: true
   grafana: false
   jaeger: false
-  kafka: true
+  kafka: false
   migrationConsole: true
   prometheus: false
-  proxy: true
-  replayer: true
+  proxy: false
+  replayer: false
   sharedConfigs: true
   snapshotVolume: true
   logsVolume: true
@@ -25,10 +25,11 @@ shared-configs:
     targetCluster:
       allowRuntimeOverride: true
       object:
-        endpoint: "http://ma-capture-proxy:9200"
-        directEndpoint: "http://elasticsearch-master:9200"
+        endpoint: "https://search-es56-test-large-snapshot-bdp4s6elknt3rcjgfpf5nk3mom.aos.us-east-1.on.aws"
         allowInsecure: true
-        authType: "no_auth"
+        authType: "sigv4"
+        region: "us-east-1"
+        serviceSigningName: "es"
         version: "ES_5.6"
       default:
         endpoint: "http://ma-capture-proxy:9200"
@@ -110,6 +111,14 @@ bulk-document-loader:
       source: parameterConfig
       value: "/shared-logs-output/test-transformations/transformation.json"
       allowRuntimeOverride: true
+    targetAwsServiceSigningName:
+      source: otherConfig
+      configMapName: "target-cluster"
+      configMapKey: "serviceSigningName"
+    targetAwsRegion:
+      source: otherConfig
+      configMapName: "target-cluster"
+      configMapKey: "region"
 
 replayer:
   sharedLogsVolumeEnabled: true
