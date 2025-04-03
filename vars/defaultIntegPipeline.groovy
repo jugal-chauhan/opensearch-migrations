@@ -3,6 +3,7 @@ def call(Map config = [:]) {
     def migrationContext = config.migrationContext
     def defaultStageId = config.defaultStageId
     def jobName = config.jobName
+    
     if(sourceContext == null || sourceContext.isEmpty()){
         throw new RuntimeException("The sourceContext argument must be provided");
     }
@@ -21,6 +22,7 @@ def call(Map config = [:]) {
     def migration_context_file_name = 'migrationJenkinsContext.json'
     def skipCaptureProxyOnNodeSetup = config.skipCaptureProxyOnNodeSetup ?: false
     def time = new Date().getTime()
+    def skipSourceDeploy = config.skipSourceDeploy ?: false
     def testUniqueId = config.testUniqueId ?: "integ_full_${time}_${currentBuild.number}"
     def testDir = "/root/lib/integ_test/integ_test"
     def integTestCommand = config.integTestCommand ?: "${testDir}/replayer_tests.py"
@@ -28,8 +30,8 @@ def call(Map config = [:]) {
         agent { label config.workerAgent ?: 'Jenkins-Default-Agent-X64-C5xlarge-Single-Host' }
 
         parameters {
-            string(name: 'GIT_REPO_URL', defaultValue: 'https://github.com/opensearch-project/opensearch-migrations.git', description: 'Git repository url')
-            string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to use for repository')
+            string(name: 'GIT_REPO_URL', defaultValue: 'https://github.com/jugal-chauhan/opensearch-migrations.git', description: 'Git repository url')
+            string(name: 'GIT_BRANCH', defaultValue: 'test-k8s-large-snapshot', description: 'Git branch to use for repository')
             string(name: 'STAGE', defaultValue: "${defaultStageId}", description: 'Stage name for deployment environment')
         }
 
@@ -133,6 +135,9 @@ def call(Map config = [:]) {
                                             "--migrations-git-branch ${params.GIT_BRANCH}"
                                     if (skipCaptureProxyOnNodeSetup) {
                                         baseCommand += " --skip-capture-proxy"
+                                    }
+                                    if (skipSourceDeploy) {
+                                        baseCommand += " --skip-source-deploy"
                                     }
                                     withCredentials([string(credentialsId: 'migrations-test-account-id', variable: 'MIGRATIONS_TEST_ACCOUNT_ID')]) {
                                         withAWS(role: 'JenkinsDeploymentRole', roleAccount: "${MIGRATIONS_TEST_ACCOUNT_ID}", duration: 5400, roleSessionName: 'jenkins-session') {
