@@ -5,5 +5,5 @@ library identifier: "migrations-lib@${gitBranch}", retriever: modernSCM(
         [$class: 'GitSCMSource',
          remote: "${gitUrl}"])
 
-// Shared library function (location from root: vars/elasticsearch5xK8sLocalTest.groovy)
-k8sLargeSnapshotGenerator.groovy()
+// Shared library function (location from root: vars/k8sLargeSnapshotGenerator.groovy)
+k8sLargeSnapshotGenerator()
