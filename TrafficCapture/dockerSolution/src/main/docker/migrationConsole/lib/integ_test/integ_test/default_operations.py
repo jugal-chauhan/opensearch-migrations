@@ -27,6 +27,13 @@ class DefaultOperationsLibrary:
         return execute_api_call(cluster=cluster, method=HttpMethod.PUT, path=f"/{index_name}",
                                 headers=headers, **kwargs)
 
+    def create_index_es56(self, index_name: str, cluster: Cluster, body: dict = None, **kwargs):
+        headers = {'Content-Type': 'application/json'}
+        if body:
+            kwargs['data'] = json.dumps(body)
+        return execute_api_call(cluster=cluster, method=HttpMethod.PUT, path=f"/{index_name}",
+                                headers=headers, **kwargs)
+
     def get_index(self, index_name: str, cluster: Cluster, **kwargs):
         return execute_api_call(cluster=cluster, method=HttpMethod.GET, path=f"/{index_name}",
                                 **kwargs)
