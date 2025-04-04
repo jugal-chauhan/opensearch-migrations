@@ -16,9 +16,9 @@ import shutil
 
 # Global configuration
 NUM_SHARDS = 200
-MULTIPLICATION_FACTOR = 9999  # N in transformation
-BATCH_COUNT = 20  # j range
-DOCS_PER_BATCH = 50000  # i range
+MULTIPLICATION_FACTOR = 999  # N in transformation
+BATCH_COUNT = 1000  # j range
+DOCS_PER_BATCH = 10000  # i range
 TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 1M source documents
 TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (1M * 10000 = 10B docs)
 
@@ -56,7 +56,7 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     # Corrected transform_config structure
     transform_config = {
         "JsonJSTransformerProvider": {
-        "initializationScript": "function transform(document, context) {\n  if (!document) {\n    throw new Error(\"No source_document was defined - nothing to transform!\");\n  }\n\n  const indexCommandMap = document.get(\"index\");\n  const sourceDocumentMap = document.get(\"source\");\n  const originalId = indexCommandMap.get(\"_id\");\n  const N = 10000;\n\n  const results = [document];\n\n  for (let i = 1; i <= N; i++) {\n    const newIndexMap = new Map(indexCommandMap);\n    newIndexMap.set(\"_id\", `${originalId}_${i}`);\n    newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\"));\n\n    const newSourceMap = new Map(sourceDocumentMap);\n    newSourceMap.set(\"doc_number\", i);\n\n    results.push(new Map([\n      [\"index\", newIndexMap],\n      [\"source\", newSourceMap]\n    ]));\n  }\n\n  return results;\n}\n\nfunction main(context) {\n  console.log(\"Context: \", JSON.stringify(context, null, 2));\n  return (document) => {\n    if (Array.isArray(document)) {\n      return document.flatMap(item => transform(item, context));\n    }\n    return transform(document, context);\n  };\n}\n\n(() => main)();",
+        "initializationScript": "function transform(document, context) {\n  if (!document) {\n    throw new Error(\"No source_document was defined - nothing to transform!\");\n  }\n\n  const indexCommandMap = document.get(\"index\");\n  const sourceDocumentMap = document.get(\"source\");\n  const originalId = indexCommandMap.get(\"_id\");\n  const N = 999;\n\n  const results = [document];\n\n  for (let i = 1; i <= N; i++) {\n    const newIndexMap = new Map(indexCommandMap);\n    newIndexMap.set(\"_id\", `${originalId}_${i}`);\n    newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\"));\n\n    const newSourceMap = new Map(sourceDocumentMap);\n    newSourceMap.set(\"doc_number\", i);\n\n    results.push(new Map([\n      [\"index\", newIndexMap],\n      [\"source\", newSourceMap]\n    ]));\n  }\n\n  return results;\n}\n\nfunction main(context) {\n  console.log(\"Context: \", JSON.stringify(context, null, 2));\n  return (document) => {\n    if (Array.isArray(document)) {\n      return document.flatMap(item => transform(item, context));\n    }\n    return transform(document, context);\n  };\n}\n\n(() => main)();",
         "bindingsObject": "{}"
         }
     }
