@@ -63,6 +63,6 @@ def call(Map config = [:]) {
             skipSourceDeploy: true,
             jobName: 'k8s-large-snapshot-test',
             testUniqueId: testUniqueId,
-            integTestCommand: '/root/lib/integ_test/integ_test/document_multiplier.py --config-file=${WORKSPACE}/config/migration-services.yaml'
+            integTestCommand: '/root/lib/integ_test/integ_test/document_multiplier.py --config-file=/config/migration-services.yaml --log-cli-level=info'
     )
 }
