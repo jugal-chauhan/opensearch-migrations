@@ -2,7 +2,7 @@ import logging
 import pytest
 import unittest
 import json
-from console_link.middleware.clusters import connection_check, clear_cluster, clear_snapshots, delete_repo, ConnectionResult
+from console_link.middleware.clusters import connection_check, clear_cluster, ConnectionResult
 from console_link.models.cluster import Cluster, HttpMethod
 from console_link.models.backfill_base import Backfill
 from console_link.models.command_result import CommandResult
@@ -19,7 +19,7 @@ NUM_SHARDS = 200
 MULTIPLICATION_FACTOR = 999  # N in transformation
 BATCH_COUNT = 1000  # j range
 DOCS_PER_BATCH = 10000  # i range
-TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 1M source documents
+TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 10M source documents
 TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (1M * 10000 = 10B docs)
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,6 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
         logger.info("Removed existing /shared-logs-output/test-transformations directory")
     except FileNotFoundError:
         logger.info("No transformation files detected to cleanup")
-
 
     # Corrected transform_config structure
     transform_config = {
@@ -133,6 +132,8 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
                     "additional_info": f"Supplementary information for document {doc_id} providing extra context and details about the test data."
                 }
             ])
+
+        # Bulk index documents
         execute_api_call(
             cluster=source_cluster,
             method=HttpMethod.POST,
@@ -141,17 +142,13 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
             headers={"Content-Type": "application/x-ndjson"}
         )
     
-    # Bulk index documents
-    
-
+    # refresh indices before creating snapshot
     execute_api_call(
         cluster=source_cluster,
         method=HttpMethod.POST,
         path="/_refresh"
     )
-
-    logger.info("Created 100 documents in bulk in index %s", index_name_source)
-
+    logger.info(f"Created {TOTAL_SOURCE_DOCS} documents in bulk in index %s", index_name_source)
 
 
 @pytest.fixture(scope="class")
@@ -192,12 +189,10 @@ def setup_backfill(request):
 
     yield
 
-    # Cleanup - stop backfill and clean snapshots
+    # Cleanup - stop backfill
     logger.info("Cleaning up test environment...")
     try:
         backfill.stop()
-        clear_snapshots(pytest.console_env.source_cluster, "migration_assistant_repo")
-        delete_repo(pytest.console_env.source_cluster, "migration_assistant_repo")
         logger.info("Backfill stopped and snapshots cleaned up.")
     except Exception as e:
         logger.error(f"Error during cleanup: {str(e)}")
@@ -245,7 +240,7 @@ class BackfillTest(unittest.TestCase):
         stable_count = 0
         max_stable_checks = 2  # Reduced from 3 to 2 consecutive stable counts needed
         
-        for attempt in range(80):  # Max 30 attempts
+        for attempt in range(720):  # Max 30 attempts
             target_response = execute_api_call(cluster=target_cluster, method=HttpMethod.GET, path=f"/{index_name_target}/_count?format=json")
             current_count = target_response.json()['count']
             
@@ -262,7 +257,7 @@ class BackfillTest(unittest.TestCase):
                 logger.warning(f"Failed to check bulk loader status: {e}")
                 bulk_loader_active = True  # Assume active if we can't check
             
-            logger.info(f"Backfill Progress - Attempt {attempt + 1}/80:")
+            logger.info(f"Backfill Progress - Attempt {attempt + 1}/720:")
             logger.info(f"- Current doc count: {current_count:,}")
             logger.info(f"- Bulk loader active: {bulk_loader_active}")
             
@@ -315,7 +310,7 @@ class BackfillTest(unittest.TestCase):
         assert backfill_start_result.success, f"Failed to start backfill: {backfill_start_result.error}"
 
         logger.info("Scaling backfill...")
-        backfill_scale_result: CommandResult = backfill.scale(units=5)
+        backfill_scale_result: CommandResult = backfill.scale(units=50)
         assert backfill_scale_result.success, f"Failed to scale backfill: {backfill_scale_result.error}"
 
         # Wait for backfill to complete
@@ -342,7 +337,7 @@ class BackfillTest(unittest.TestCase):
         assert target_total_docs > 0, "No documents were migrated to target index"
         assert target_total_docs == TOTAL_SOURCE_DOCS * MULTIPLICATION_FACTOR, f"Document count mismatch: source={source_total_docs}, target={target_total_docs}"
 
-        # Stop backfill using the API directly
+        # Stop backfill
         logger.info("\n=== Stopping Backfill ===")
         stop_result = backfill.stop()
         assert stop_result.success, f"Failed to stop backfill: {stop_result.error}"
