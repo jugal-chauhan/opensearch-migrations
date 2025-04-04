@@ -218,7 +218,7 @@ class BackfillTest(unittest.TestCase):
     """Test backfill functionality"""
 
     def get_cluster_stats(self, cluster: Cluster, index_name_source: str = None):
-        """Get document count and size stats for a cluster"""
+        """Get document count and size stats for a cluster (primary shards only)"""
         try:
             if index_name_source:
                 path = f"/{index_name_source}/_stats"
@@ -226,8 +226,8 @@ class BackfillTest(unittest.TestCase):
                 path = "/_stats"
 
             stats = execute_api_call(cluster=cluster, method=HttpMethod.GET, path=path).json()
-            total_docs = stats['_all']['total']['docs']['count']
-            total_size_bytes = stats['_all']['total']['store']['size_in_bytes']
+            total_docs = stats['_all']['primaries']['docs']['count']
+            total_size_bytes = stats['_all']['primaries']['store']['size_in_bytes']
             total_size_mb = total_size_bytes / (1024 * 1024)
             
             return total_docs, total_size_mb
