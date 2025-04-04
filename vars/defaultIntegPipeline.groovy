@@ -153,7 +153,7 @@ def call(Map config = [:]) {
 
             stage('Integ Tests') {
                 steps {
-                    timeout(time: 1, unit: 'HOURS') {
+                    timeout(time: 2, unit: 'HOURS') {
                         dir('test') {
                             script {
                                 // Allow overwriting this step
