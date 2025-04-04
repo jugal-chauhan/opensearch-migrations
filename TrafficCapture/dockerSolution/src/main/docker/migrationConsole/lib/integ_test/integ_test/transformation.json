@@ -1,8 +1,0 @@
-[
-    {
-      "JsonJSTransformerProvider": {
-        "initializationScript": "function transform(document, context) {\n  if (!document) throw Error(\"No document provided\");\n  \n  const indexMap = document.get(\"index\");\n  const sourceMap = document.get(\"source\");\n  const originalId = indexMap.get(\"_id\");\n  \n  const results = [];\n  const iterations = 10000;\n\n  for (let k = 1; k <= iterations; k++) {\n    const newIndex = new Map(indexMap);\n    const newSource = new Map(sourceMap);\n    \n    newIndex.set(\"_id\", `${originalId}_${k}`);\n    newIndex.set(\"_index\", indexMap.get(\"_index\").replace(\"largetest\", \"new_largetest\"));\n    \n    const originalNum = sourceMap.get(\"doc_number\");\n    newSource.set(\"doc_number\", originalNum * 10000 + k);\n    \n    results.push(new Map([\n      [\"index\", newIndex],\n      [\"source\", newSource]\n    ]));\n  }\n  return results;\n}",
-        "bindingsObject": "{}"
-      }
-    }
-]

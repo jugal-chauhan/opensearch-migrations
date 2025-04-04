@@ -15,12 +15,12 @@ import time
 import shutil
 
 # Global configuration
-NUM_SHARDS = 50
+NUM_SHARDS = 200
 MULTIPLICATION_FACTOR = 9999  # N in transformation
-BATCH_COUNT = 10  # j range
-DOCS_PER_BATCH = 200000  # i range
-TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 2M source documents
-TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (2M * 10000 = 20B docs)
+BATCH_COUNT = 20  # j range
+DOCS_PER_BATCH = 50000  # i range
+TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 1M source documents
+TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (1M * 10000 = 10B docs)
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +53,56 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
         logger.info("No transformation files detected to cleanup")
 
     # Create transformation.json file
-    transform_config_data = [
-        {
-            "JsonJSTransformerProvider": {
-                "initializationScript": f"function transform(document, context) {{\n  if (!document) {{\n    throw new Error(\"No source_document was defined - nothing to transform!\");\n  }}\n\n  const indexCommandMap = document.get(\"index\");\n  const sourceDocumentMap = document.get(\"source\");\n  const originalId = indexCommandMap.get(\"_id\");\n  const N = {MULTIPLICATION_FACTOR};\n\n  const results = [document];\n\n  for (let i = 1; i <= N; i++) {{\n    const newIndexMap = new Map(indexCommandMap);\n    newIndexMap.set(\"_id\", `${{originalId}}_${{i}}`);\n    newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\"));\n\n    const newSourceMap = new Map(sourceDocumentMap);\n    newSourceMap.set(\"doc_number\", i);\n\n    results.push(new Map([\n      [\"index\", newIndexMap],\n      [\"source\", newSourceMap]\n    ]));\n  }}\n\n  return results;\n}}\n\nfunction main(context) {{\n  console.log(\"Context: \", JSON.stringify(context, null, 2));\n  return (document) => {{\n    if (Array.isArray(document)) {{\n      return document.flatMap(item => transform(item, context));\n    }}\n    return transform(document, context);\n  }};\n}}\n\n(() => main)();",
-                "bindingsObject": {}
-            }
+    transform_config = {
+        "JsonJSTransformerProvider": {
+            "initializationScript": f'''
+function transform(document, context) {{
+    if (!document) {{
+        throw new Error("No source_document was defined - nothing to transform!");
+    }}
+
+    const indexCommandMap = document.get("index");
+    const sourceDocumentMap = document.get("source");
+    const originalId = indexCommandMap.get("_id");
+    const N = {MULTIPLICATION_FACTOR};
+
+    const results = [document];
+
+    for (let i = 1; i <= N; i++) {{
+        const newIndexMap = new Map(indexCommandMap);
+        newIndexMap.set("_id", `${{originalId}}_${{i}}`);
+        newIndexMap.set("_index", indexCommandMap.get("_index").replace("largetest", "new_largetest"));
+
+        const newSourceMap = new Map(sourceDocumentMap);
+        newSourceMap.set("doc_number", i);
+
+        results.push(new Map([
+            ["index", newIndexMap],
+            ["source", newSourceMap]
+        ]));
+    }}
+
+    return results;
+}}
+
+function main(context) {{
+    console.log("Context: ", JSON.stringify(context, null, 2));
+    return (document) => {{
+        if (Array.isArray(document)) {{
+            return document.flatMap(item => transform(item, context));
+        }}
+        return transform(document, context);
+    }};
+}}
+
+(() => main)();
+''',
+            "bindingsObject": {}
         }
-    ]
-    ops.create_transformation_json_file(transform_config_data, "/shared-logs-output/test-transformations/transformation.json")
+    }
+
+    # Create the transformation file
+    ops.create_transformation_json_file([transform_config], "/shared-logs-output/test-transformations/transformation.json")
 
     # Create source index with settings for ES 5.6
     index_settings = {
@@ -114,7 +155,7 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
                     "timestamp": datetime.now().isoformat(),
                     "value": f"test_value_{i}",
                     "doc_number": i,
-                    "description": f"This is a detailed description for document {doc_id} containing information about the test data and its purpose in the migration process.",
+                    "description": f"This is a detailed description for document {doc_id} containing information about the test data and its purpose in the large snapshot creation process.",
                     "metadata": {
                         "tags": [f"tag1_{i}", f"tag2_{i}", f"tag3_{i}"],
                         "category": f"category_{i % 10}",
@@ -125,7 +166,7 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
                         "region": f"region_{i % 12}",
                         "details": f"Detailed metadata information for document {doc_id} including test parameters."
                     },
-                    "content": f"Main content for document {doc_id}. This section contains the primary information and data relevant to the testing process. The content is designed to test the system's ability to handle substantial amounts of text data.",
+                    "content": f"Main content for document {doc_id}. This section contains the primary information and data relevant to the testing process. The content is designed to create minimal document for migration and multiplication.",
                     "additional_info": f"Supplementary information for document {doc_id} providing extra context and details about the test data."
                 }
             ])
@@ -311,7 +352,7 @@ class BackfillTest(unittest.TestCase):
         assert backfill_start_result.success, f"Failed to start backfill: {backfill_start_result.error}"
 
         logger.info("Scaling backfill...")
-        backfill_scale_result: CommandResult = backfill.scale(units=1)
+        backfill_scale_result: CommandResult = backfill.scale(units=5)
         assert backfill_scale_result.success, f"Failed to scale backfill: {backfill_scale_result.error}"
 
         # Wait for backfill to complete
