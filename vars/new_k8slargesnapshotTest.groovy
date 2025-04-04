@@ -39,7 +39,6 @@ def call(Map config = [:]) {
             "migrationAssistanceEnabled": true,
             "replayerOutputEFSRemovalPolicy": "DESTROY",
             "migrationConsoleServiceEnabled": true,
-            "reindexFromSnapshotWorkerSize": "maximum",
             "otelCollectorEnabled": true
           }
         }
