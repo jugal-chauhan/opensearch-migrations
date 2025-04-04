@@ -14,6 +14,14 @@ from datetime import datetime
 import time
 import shutil
 
+# Global configuration
+NUM_SHARDS = 50
+MULTIPLICATION_FACTOR = 9999  # N in transformation
+BATCH_COUNT = 10  # j range
+DOCS_PER_BATCH = 200000  # i range
+TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 2M source documents
+TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (2M * 10000 = 20B docs)
+
 logger = logging.getLogger(__name__)
 
 class CliContext:
@@ -37,7 +45,7 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     clear_cluster(source_cluster)
     clear_cluster(target_cluster)
 
-        # Cleanup generated transformation files
+    # Cleanup generated transformation files
     try:
         shutil.rmtree("/shared-logs-output/test-transformations")
         logger.info("Removed existing /shared-logs-output/test-transformations directory")
@@ -45,29 +53,43 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
         logger.info("No transformation files detected to cleanup")
 
     # Create transformation.json file
-    # with open(ops.get_project_root() + "/integ_test/transformation.json", "r") as f:
     transform_config_data = [
         {
-        "JsonJSTransformerProvider": {
-            "initializationScript": "function mapToPlainObjectReplacer(key, value) { if (value instanceof Map) { return Object.fromEntries(value); } return value; } function transform(document, context) { if (!document) { throw new Error(\"No source_document was defined - nothing to transform!\"); } const indexCommandMap = document.get(\"index\"); const sourceDocumentMap = document.get(\"source\"); const baseId = indexCommandMap.get(\"_id\"); const baseDocNum = parseInt(baseId.split('_')[1]); const results = []; const N = 9999; for (let i = 0; i <= N; i++) { const newIndexMap = new Map(indexCommandMap); const newId = `doc_${baseDocNum}${i.toString().padStart(4, '0')}`; newIndexMap.set(\"_id\", newId); newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const newSourceMap = new Map(sourceDocumentMap); newSourceMap.set(\"doc_number\", baseDocNum * 10000 + i); results.push(new Map([ [\"index\", newIndexMap], [\"source\", newSourceMap] ])); } return results; } function main(context) { console.log(\"Context: \", JSON.stringify(context, mapToPlainObjectReplacer, 2)); return (document) => { if (Array.isArray(document)) { return document.flatMap(item => transform(item, context)); } return transform(document, context); }; } (() => main)()",
-            "bindingsObject": "{}"
+            "JsonJSTransformerProvider": {
+                "initializationScript": f"function transform(document, context) {{\n  if (!document) {{\n    throw new Error(\"No source_document was defined - nothing to transform!\");\n  }}\n\n  const indexCommandMap = document.get(\"index\");\n  const sourceDocumentMap = document.get(\"source\");\n  const originalId = indexCommandMap.get(\"_id\");\n  const N = {MULTIPLICATION_FACTOR};\n\n  const results = [document];\n\n  for (let i = 1; i <= N; i++) {{\n    const newIndexMap = new Map(indexCommandMap);\n    newIndexMap.set(\"_id\", `${{originalId}}_${{i}}`);\n    newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\"));\n\n    const newSourceMap = new Map(sourceDocumentMap);\n    newSourceMap.set(\"doc_number\", i);\n\n    results.push(new Map([\n      [\"index\", newIndexMap],\n      [\"source\", newSourceMap]\n    ]));\n  }}\n\n  return results;\n}}\n\nfunction main(context) {{\n  console.log(\"Context: \", JSON.stringify(context, null, 2));\n  return (document) => {{\n    if (Array.isArray(document)) {{\n      return document.flatMap(item => transform(item, context));\n    }}\n    return transform(document, context);\n  }};\n}}\n\n(() => main)();",
+                "bindingsObject": {}
             }
         }
     ]
-    ops.create_transformation_json_file(json.dumps(transform_config_data), "/shared-logs-output/test-transformations/transformation.json")
+    ops.create_transformation_json_file(transform_config_data, "/shared-logs-output/test-transformations/transformation.json")
 
-    # Create source index with settings
+    # Create source index with settings for ES 5.6
     index_settings = {
         "settings": {
-            "number_of_shards": "50",
+            "number_of_shards": str(NUM_SHARDS),
             "number_of_replicas": "1"
         },
         "mappings": {
-            "doc": {
+            "doc": {  # ES 5.6 type mapping
                 "properties": {
                     "timestamp": {"type": "date"},
                     "value": {"type": "keyword"},
-                    "doc_number": {"type": "integer"}
+                    "doc_number": {"type": "integer"},
+                    "description": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+                    "metadata": {
+                        "properties": {  # ES 5.6 nested object mapping
+                            "tags": {"type": "keyword"},
+                            "category": {"type": "keyword"},
+                            "subcategories": {"type": "keyword"},
+                            "attributes": {"type": "keyword"},
+                            "status": {"type": "keyword"},
+                            "version": {"type": "keyword"},
+                            "region": {"type": "keyword"},
+                            "details": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}}
+                        }
+                    },
+                    "content": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+                    "additional_info": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}}
                 }
             }
         }
@@ -80,18 +102,31 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     # Create index on both source and target with same settings
     ops.create_index_es56(cluster=source_cluster, index_name=index_name_source, data=json.dumps(index_settings))
     ops.create_index_es56(cluster=source_cluster, index_name=index_name_target, data=json.dumps(index_settings))
-
-    # Create 100 documents with timestamp in bulk
-    for j in range(10):
+    
+    # Create documents with timestamp in bulk
+    for j in range(BATCH_COUNT):
         bulk_data = []
-        for i in range(200000):
+        for i in range(DOCS_PER_BATCH):
             doc_id = f"doc_{j}_{i}"
             bulk_data.extend([
                 {"index": {"_index": index_name_source, "_type": "doc", "_id": doc_id}},
                 {
                     "timestamp": datetime.now().isoformat(),
                     "value": f"test_value_{i}",
-                    "doc_number": i
+                    "doc_number": i,
+                    "description": f"This is a detailed description for document {doc_id} containing information about the test data and its purpose in the migration process.",
+                    "metadata": {
+                        "tags": [f"tag1_{i}", f"tag2_{i}", f"tag3_{i}"],
+                        "category": f"category_{i % 10}",
+                        "subcategories": [f"subcat1_{i % 5}", f"subcat2_{i % 5}"],
+                        "attributes": [f"attr1_{i % 8}", f"attr2_{i % 8}"],
+                        "status": f"status_{i % 6}",
+                        "version": f"1.{i % 10}.{i % 5}",
+                        "region": f"region_{i % 12}",
+                        "details": f"Detailed metadata information for document {doc_id} including test parameters."
+                    },
+                    "content": f"Main content for document {doc_id}. This section contains the primary information and data relevant to the testing process. The content is designed to test the system's ability to handle substantial amounts of text data.",
+                    "additional_info": f"Supplementary information for document {doc_id} providing extra context and details about the test data."
                 }
             ])
         execute_api_call(
@@ -267,8 +302,8 @@ class BackfillTest(unittest.TestCase):
 
         logger.info("\n=== Starting Backfill Process ===")
         logger.info(f"Target Index: {index_name_target}")
-        logger.info(f"Expected Document Multiplication Factor: 10,000")
-        logger.info(f"Expected Final Document Count: {source_docs * 10000:,}")
+        logger.info(f"Expected Document Multiplication Factor: {MULTIPLICATION_FACTOR}")
+        logger.info(f"Expected Final Document Count: {TOTAL_SOURCE_DOCS * MULTIPLICATION_FACTOR:,}")
 
         # Start and scale backfill
         logger.info("Starting backfill...")
@@ -301,7 +336,7 @@ class BackfillTest(unittest.TestCase):
 
         # Assert that documents were actually migrated
         assert target_total_docs > 0, "No documents were migrated to target index"
-        assert target_total_docs == source_total_docs * 10000, f"Document count mismatch: source={source_total_docs}, target={target_total_docs}"
+        assert target_total_docs == TOTAL_SOURCE_DOCS * MULTIPLICATION_FACTOR, f"Document count mismatch: source={source_total_docs}, target={target_total_docs}"
 
         # Stop backfill using the API directly
         logger.info("\n=== Stopping Backfill ===")
