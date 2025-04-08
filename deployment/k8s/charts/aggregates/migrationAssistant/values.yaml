@@ -17,7 +17,7 @@ shared-configs:
     sourceCluster:
       allowRuntimeOverride: true
       object:
-        endpoint: "https://search-es56-test2-large-snapshot-gu73liixr675uddje2rtbi3qla.aos.us-east-1.on.aws"
+        endpoint: "https://search-test-large-snapshot2-es56-cez4mwx3xsmmac44u3f2dm3ira.aos.us-east-1.on.aws"
         allowInsecure: true
         authType: "sigv4"
         region: "us-east-1"
@@ -26,7 +26,7 @@ shared-configs:
     targetCluster:
       allowRuntimeOverride: true
       object:
-        endpoint: "https://search-es56-test2-large-snapshot-gu73liixr675uddje2rtbi3qla.aos.us-east-1.on.aws"
+        endpoint: "https://search-test-large-snapshot2-es56-cez4mwx3xsmmac44u3f2dm3ira.aos.us-east-1.on.aws"
         allowInsecure: true
         authType: "sigv4"
         region: "us-east-1"

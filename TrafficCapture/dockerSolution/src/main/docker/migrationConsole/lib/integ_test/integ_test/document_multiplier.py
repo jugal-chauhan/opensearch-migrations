@@ -21,6 +21,7 @@ BATCH_COUNT = 1500  # j range
 DOCS_PER_BATCH = 10000  # i range
 TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 10M source documents
 TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (1M * 10000 = 10B docs)
+BACKFILL_TIMEOUT_HOURS = 45  # Timeout for backfill completion in hours
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,7 @@ class BackfillTest(unittest.TestCase):
             logger.error(f"Error getting cluster stats: {str(e)}")
             return 0, 0
 
-    def wait_for_backfill_completion(self, target_cluster: Cluster, index_name_target: str, timeout_hours: int = 24):
+    def wait_for_backfill_completion(self, target_cluster: Cluster, index_name_target: str, timeout_hours: int = BACKFILL_TIMEOUT_HOURS):
         """Wait until document count stabilizes or bulk-loader pods terminate"""
         previous_count = 0
         stable_count = 0
