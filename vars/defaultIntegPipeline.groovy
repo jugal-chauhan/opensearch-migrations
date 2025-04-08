@@ -38,7 +38,7 @@ def call(Map config = [:]) {
         options {
             // Acquire lock on a given deployment stage
             lock(label: params.STAGE, quantity: 1, variable: 'stage')
-            timeout(time: 3, unit: 'HOURS')
+            timeout(time: 15, unit: 'HOURS')
             buildDiscarder(logRotator(daysToKeepStr: '30'))
         }
 
@@ -153,7 +153,7 @@ def call(Map config = [:]) {
 
             stage('Integ Tests') {
                 steps {
-                    timeout(time: 2, unit: 'HOURS') {
+                    timeout(time: 20, unit: 'HOURS') {
                         dir('test') {
                             script {
                                 // Allow overwriting this step

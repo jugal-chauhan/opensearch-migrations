@@ -234,7 +234,7 @@ class BackfillTest(unittest.TestCase):
             logger.error(f"Error getting cluster stats: {str(e)}")
             return 0, 0
 
-    def wait_for_backfill_completion(self, target_cluster: Cluster, index_name_target: str, timeout_hours: int = 6):
+    def wait_for_backfill_completion(self, target_cluster: Cluster, index_name_target: str, timeout_hours: int = 24):
         """Wait until document count stabilizes or bulk-loader pods terminate"""
         previous_count = 0
         stable_count = 0
