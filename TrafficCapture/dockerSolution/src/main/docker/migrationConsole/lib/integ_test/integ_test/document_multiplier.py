@@ -17,8 +17,8 @@ import shutil
 # Global configuration
 NUM_SHARDS = 10
 MULTIPLICATION_FACTOR = 1000  # N in transformation
-BATCH_COUNT = 10  # j range
-DOCS_PER_BATCH = 10  # i range
+BATCH_COUNT = 2  # j range
+DOCS_PER_BATCH = 100  # i range
 TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 10M source documents
 EXPECTED_TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR)  
 BACKFILL_TIMEOUT_HOURS = 45  # Timeout for backfill completion in hours
@@ -323,7 +323,7 @@ class BackfillTest(unittest.TestCase):
         assert backfill_start_result.success, f"Failed to start backfill: {backfill_start_result.error}"
 
         logger.info("Scaling backfill...")
-        backfill_scale_result: CommandResult = backfill.scale(units=80)
+        backfill_scale_result: CommandResult = backfill.scale(units=8)
         assert backfill_scale_result.success, f"Failed to scale backfill: {backfill_scale_result.error}"
 
         # Wait for backfill to complete
