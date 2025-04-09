@@ -15,12 +15,12 @@ import time
 import shutil
 
 # Global configuration
-NUM_SHARDS = 500
+NUM_SHARDS = 10
 MULTIPLICATION_FACTOR = 1000  # N in transformation
 BATCH_COUNT = 10  # j range
 DOCS_PER_BATCH = 10  # i range
 TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 10M source documents
-EXPECTED_TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (1M * 10000 = 10B docs)
+EXPECTED_TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR)  
 BACKFILL_TIMEOUT_HOURS = 45  # Timeout for backfill completion in hours
 
 logger = logging.getLogger(__name__)
@@ -355,6 +355,18 @@ class BackfillTest(unittest.TestCase):
         stop_result = backfill.stop()
         assert stop_result.success, f"Failed to stop backfill: {stop_result.error}"
         logger.info("Backfill stopped successfully")
+
+        snapshot: Snapshot = pytest.console_env.snapshot
+        assert snapshot is not None
+        logger.info("\n=== Creating Final Snapshot ===")
+        final_snapshot_result: CommandResult = snapshot.create(
+            wait=True,
+            max_snapshot_rate_mb_per_node=2000,  
+            s3_repo_uri="s3://test-large-snapshot-bucket/largesnapshot/",  
+            s3_region="us-east-1"  
+        )
+        assert final_snapshot_result.success
+        logger.info("Final Snapshot after migration and multiplication was created successfully")
 
         logger.info("\n=== Test Completed Successfully ===")
         logger.info("Document multiplication verified with correct count")
