@@ -363,9 +363,9 @@ class BackfillTest(unittest.TestCase):
         final_snapshot_config = {
             'snapshot_name': f'final-snapshot-{pytest.unique_id}',  # Use unique ID to avoid conflicts
             's3': {
-                'repo_uri': 's3://migration-artifacts-863518433585-dev-us-east-1/final-large-snapshot/',  # New folder
+                'repo_uri': 's3://test-large-snapshot-bucket/es56-10tb-snapshot/',  # New folder
                 'aws_region': 'us-east-1',
-                'role': 'arn:aws:iam::863518433585:role/OSMigrations-dev-us-east-1-default-SnapshotRole'  # Add role ARN
+                'role': 'arn:aws:iam::863518433585:role/LargeSnapshotAccessRole'  # Add role ARN
             }
         }
         final_snapshot = S3Snapshot(final_snapshot_config, pytest.console_env.source_cluster)
