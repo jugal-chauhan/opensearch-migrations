@@ -8,6 +8,7 @@ from console_link.models.backfill_base import Backfill
 from console_link.models.command_result import CommandResult
 from console_link.models.snapshot import Snapshot
 from console_link.cli import Context
+from console_link.models.snapshot import S3Snapshot  # Import S3Snapshot
 from .default_operations import DefaultOperationsLibrary
 from .common_utils import execute_api_call
 from datetime import datetime
@@ -359,11 +360,17 @@ class BackfillTest(unittest.TestCase):
         snapshot: Snapshot = pytest.console_env.snapshot
         assert snapshot is not None
         logger.info("\n=== Creating Final Snapshot ===")
-        final_snapshot_result: CommandResult = snapshot.create(
+        final_snapshot_config = {
+            'snapshot_name': f'final-snapshot-{pytest.unique_id}',  # Use unique ID to avoid conflicts
+            's3': {
+                'repo_uri': 's3://migration-artifacts-863518433585-dev-us-east-1/final-large-snapshot/',  # New folder
+                'aws_region': 'us-east-1'
+            }
+        }
+        final_snapshot = S3Snapshot(final_snapshot_config, pytest.console_env.source_cluster)
+        final_snapshot_result: CommandResult = final_snapshot.create(
             wait=True,
-            max_snapshot_rate_mb_per_node=2000,  
-            s3_repo_uri="s3://test-large-snapshot-bucket/largesnapshot/",  
-            s3_region="us-east-1"  
+            max_snapshot_rate_mb_per_node=2000
         )
         assert final_snapshot_result.success
         logger.info("Final Snapshot after migration and multiplication was created successfully")
