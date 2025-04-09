@@ -38,7 +38,7 @@ def call(Map config = [:]) {
         options {
             // Acquire lock on a given deployment stage
             lock(label: params.STAGE, quantity: 1, variable: 'stage')
-            timeout(time: 15, unit: 'HOURS')
+            timeout(time: 30, unit: 'HOURS')
             buildDiscarder(logRotator(daysToKeepStr: '30'))
         }
 

@@ -20,7 +20,7 @@ MULTIPLICATION_FACTOR = 999  # N in transformation
 BATCH_COUNT = 1500  # j range
 DOCS_PER_BATCH = 10000  # i range
 TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 10M source documents
-TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (1M * 10000 = 10B docs)
+EXPECTED_TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  # +1 because transformation keeps original doc (1M * 10000 = 10B docs)
 BACKFILL_TIMEOUT_HOURS = 45  # Timeout for backfill completion in hours
 
 logger = logging.getLogger(__name__)
@@ -239,7 +239,7 @@ class BackfillTest(unittest.TestCase):
         """Wait until document count stabilizes or bulk-loader pods terminate"""
         previous_count = 0
         stable_count = 0
-        required_stable_checks = 3  # Need 3 consecutive stable counts at TOTAL_TARGET_DOCS
+        required_stable_checks = 3  # Need 3 consecutive stable counts at EXPECTED_TOTAL_TARGET_DOCS
         start_time = time.time()
         timeout_seconds = timeout_hours * 3600
         
@@ -266,8 +266,8 @@ class BackfillTest(unittest.TestCase):
             elapsed_hours = (time.time() - start_time) / 3600
             logger.info(f"Backfill Progress - {elapsed_hours:.2f} hours elapsed:")
             logger.info(f"- Current doc count: {current_count:,}")
-            logger.info(f"- Target doc count: {TOTAL_TARGET_DOCS:,}")
-            logger.info(f"- Progress: {(current_count/TOTAL_TARGET_DOCS*100):.2f}%")
+            logger.info(f"- Target doc count: {EXPECTED_TOTAL_TARGET_DOCS:,}")
+            logger.info(f"- Progress: {(current_count/EXPECTED_TOTAL_TARGET_DOCS*100):.2f}%")
             logger.info(f"- Bulk loader active: {bulk_loader_active}")
             
             # Don't consider it stable if count is 0 and bulk loader is still active
@@ -275,11 +275,11 @@ class BackfillTest(unittest.TestCase):
                 logger.info("Waiting for documents to start appearing...")
                 stable_count = 0
             # Only consider it stable if count matches previous and is non-zero
-            elif current_count == TOTAL_TARGET_DOCS:
+            elif current_count == EXPECTED_TOTAL_TARGET_DOCS:
                 stable_count += 1
-                logger.info(f"Count stable at target {TOTAL_TARGET_DOCS:,} for {stable_count}/{required_stable_checks} checks")
+                logger.info(f"Count stable at target {EXPECTED_TOTAL_TARGET_DOCS:,} for {stable_count}/{required_stable_checks} checks")
                 if stable_count >= required_stable_checks:
-                    logger.info(f"Document count reached target {TOTAL_TARGET_DOCS:,} and stabilized for {required_stable_checks} consecutive checks")
+                    logger.info(f"Document count reached target {EXPECTED_TOTAL_TARGET_DOCS:,} and stabilized for {required_stable_checks} consecutive checks")
                     return
             else:
                 if current_count != previous_count:
@@ -346,7 +346,7 @@ class BackfillTest(unittest.TestCase):
 
         # Assert that documents were actually migrated
         assert target_total_docs > 0, "No documents were migrated to target index"
-        assert target_total_docs == TOTAL_SOURCE_DOCS * MULTIPLICATION_FACTOR, f"Document count mismatch: source={source_total_docs}, target={target_total_docs}"
+        assert target_total_docs == EXPECTED_TOTAL_TARGET_DOCS, f"Document count mismatch: source={source_total_docs}, target={target_total_docs}"
 
         # Stop backfill
         logger.info("\n=== Stopping Backfill ===")
