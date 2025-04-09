@@ -18,7 +18,7 @@ def call(Map config = [:]) {
             "reindexFromSnapshotServiceEnabled": true,
             "reindexFromSnapshotExtraArgs": "--doc-transformer-config-file ${docTransformerPath}",
             "sourceCluster": {
-                "endpoint": "https://search-test-large-snapshot2-es56-cez4mwx3xsmmac44u3f2dm3ira.aos.us-east-1.on.aws",
+                "endpoint": "https://search-test-large-snapshot3-es56-r3bsjpvx477msw2t2yreuk77l4.aos.us-east-1.on.aws",
                 "auth": {
                     "type": "sigv4",
                     "region": "us-east-1",
@@ -27,7 +27,7 @@ def call(Map config = [:]) {
                 "version": "ES_5.6"
             },
             "targetCluster": {
-                "endpoint": "https://search-test-large-snapshot2-es56-cez4mwx3xsmmac44u3f2dm3ira.aos.us-east-1.on.aws",
+                "endpoint": "https://search-test-large-snapshot3-es56-r3bsjpvx477msw2t2yreuk77l4.aos.us-east-1.on.aws",
                 "auth": {
                     "type": "sigv4",
                     "region": "us-east-1",
