@@ -57,12 +57,10 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     # Corrected transform_config structure
     transform_config = {
     "JsonJSTransformerProvider": {
-        "initializationScript": "function transform(document, context) { if (!document) { throw new Error(\"No source_document was defined - nothing to transform!\"); } const indexCommandMap = document.get(\"index\"); const sourceDocumentMap = document.get(\"source\"); const originalId = indexCommandMap.get(\"_id\"); const N = 999; const modifiedOriginalIndex = new Map(indexCommandMap); modifiedOriginalIndex.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const results = [ new Map([ [\"index\", modifiedOriginalIndex], [\"source\", sourceDocumentMap] ]) ]; for (let i = 1; i <= N; i++) { const newIndexMap = new Map(indexCommandMap); newIndexMap.set(\"_id\", `${originalId}_${i}`); newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const newSourceMap = new Map(sourceDocumentMap); newSourceMap.set(\"doc_number\", i); results.push(new Map([[\"index\", newIndexMap], [\"source\", newSourceMap]])); } return results; } function main(context) { console.log(\"Context: \", JSON.stringify(context, null, 2)); return (document) => { if (Array.isArray(document)) { return document.flatMap((item) => transform(item, context)); } return transform(document, context); }; } (() => main)();",
+        "initializationScript": "function transform(document, context) { if (!document) { throw new Error(\"No source_document was defined - nothing to transform!\"); } const indexCommandMap = document.get(\"index\"); const sourceDocumentMap = document.get(\"source\"); const originalId = indexCommandMap.get(\"_id\"); const N = " + str(MULTIPLICATION_FACTOR) + "; const modifiedOriginalIndex = new Map(indexCommandMap); modifiedOriginalIndex.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const results = [ new Map([ [\"index\", modifiedOriginalIndex], [\"source\", sourceDocumentMap] ]) ]; for (let i = 1; i <= N; i++) { const newIndexMap = new Map(indexCommandMap); newIndexMap.set(\"_id\", `${originalId}_${i}`); newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const newSourceMap = new Map(sourceDocumentMap); newSourceMap.set(\"doc_number\", i); results.push(new Map([[\"index\", newIndexMap], [\"source\", newSourceMap]])); } return results; } function main(context) { console.log(\"Context: \", JSON.stringify(context, null, 2)); return (document) => { if (Array.isArray(document)) { return document.flatMap((item) => transform(item, context)); } return transform(document, context); }; } (() => main)();",
         "bindingsObject": "{}"
         }
     }
-    
-
 
     # This part remains unchanged
     ops.create_transformation_json_file(
@@ -74,7 +72,7 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     index_settings = {
         "settings": {
             "number_of_shards": str(NUM_SHARDS),
-            "number_of_replicas": "1"
+            "number_of_replicas": "0"
         },
         "mappings": {
             "doc": {  # ES 5.6 type mapping
