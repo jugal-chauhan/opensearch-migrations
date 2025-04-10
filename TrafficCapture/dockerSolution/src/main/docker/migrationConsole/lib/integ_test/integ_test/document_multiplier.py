@@ -11,6 +11,7 @@ from console_link.models.snapshot import Snapshot
 from console_link.cli import Context
 from console_link.models.snapshot import S3Snapshot  # Import S3Snapshot
 from console_link.models.backfill_rfs import RfsWorkersInProgress
+from console_link.models.command_runner import CommandRunner
 from .default_operations import DefaultOperationsLibrary
 from .common_utils import execute_api_call
 from datetime import datetime
@@ -21,11 +22,11 @@ from urllib.parse import urlparse
 
 # Global configuration
 NUM_SHARDS = 10
-MULTIPLICATION_FACTOR = 999  # N in transformation
+MULTIPLICATION_FACTOR = 1000  # N in transformation
 BATCH_COUNT = 2  # j range
 DOCS_PER_BATCH = 100  # i range
 TOTAL_SOURCE_DOCS = BATCH_COUNT * DOCS_PER_BATCH  # 10M source documents
-EXPECTED_TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * (MULTIPLICATION_FACTOR + 1)  
+EXPECTED_TOTAL_TARGET_DOCS = TOTAL_SOURCE_DOCS * MULTIPLICATION_FACTOR
 BACKFILL_TIMEOUT_HOURS = 45  # Timeout for backfill completion in hours
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ def preload_data(source_cluster: Cluster, target_cluster: Cluster):
     # Corrected transform_config structure
     transform_config = {
     "JsonJSTransformerProvider": {
-        "initializationScript": "function transform(document, context) { if (!document) { throw new Error(\"No source_document was defined - nothing to transform!\"); } const indexCommandMap = document.get(\"index\"); const sourceDocumentMap = document.get(\"source\"); const originalId = indexCommandMap.get(\"_id\"); const N = " + str(MULTIPLICATION_FACTOR) + "; const modifiedOriginalIndex = new Map(indexCommandMap); modifiedOriginalIndex.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const results = [ new Map([ [\"index\", modifiedOriginalIndex], [\"source\", sourceDocumentMap] ]) ]; for (let i = 1; i <= N; i++) { const newIndexMap = new Map(indexCommandMap); newIndexMap.set(\"_id\", `${originalId}_${i}`); newIndexMap.set(\"_index\", indexCommandMap.get(\"_index\").replace(\"largetest\", \"new_largetest\")); const newSourceMap = new Map(sourceDocumentMap); newSourceMap.set(\"doc_number\", i); results.push(new Map([[\"index\", newIndexMap], [\"source\", newSourceMap]])); } return results; } function main(context) { console.log(\"Context: \", JSON.stringify(context, null, 2)); return (document) => { if (Array.isArray(document)) { return document.flatMap((item) => transform(item, context)); } return transform(document, context); }; } (() => main)();",
+        "initializationScript": "const MULTIPLICATION_FACTOR = " + str(MULTIPLICATION_FACTOR)+ "; function transform(document) { if (!document) { throw new Error(\"No source_document was defined - nothing to transform!\"); } const indexCommandMap = document.get(\"index\"); const originalSource = document.get(\"source\"); const docsToCreate = []; for (let i = 0; i < MULTIPLICATION_FACTOR; i++) { const newIndexMap = new Map(indexCommandMap); const newId = newIndexMap.get(\"_id\") + ((i !== 0) ? `_${i}` : \"\"); newIndexMap.set(\"_id\", newId); docsToCreate.push(new Map([[\"index\", newIndexMap], [\"source\", originalSource]])); } return docsToCreate; } function main(context) { console.log(\"Context: \", JSON.stringify(context, null, 2)); return (document) => { if (Array.isArray(document)) { return document.flatMap((item) => transform(item, context)); } return transform(document); }; } (() => main)();",
         "bindingsObject": "{}"
         }
     }
@@ -293,8 +294,6 @@ class BackfillTest(unittest.TestCase):
                 
             previous_count = current_count
             time.sleep(30)
-        
-        logger.warning("Backfill monitoring timed out after 30 attempts")
 
     def delete_s3_bucket_contents(self, s3_uri: str):
         """Delete all files from a specific S3 bucket URI"""
@@ -412,13 +411,20 @@ class BackfillTest(unittest.TestCase):
         snapshot.delete_snapshot_repo()
 
         # Clean up S3 bucket contents
-        # self.delete_s3_bucket_contents('s3://test-large-snapshot-bucket/es56-10tb-snapshot/')
-        command_runner = pytest.console_env.command_runner
-        command_runner.run_command(
-            f"aws s3 rm s3://test-large-snapshot-bucket/es56-10tb-snapshot/ --recursive",
-            check=True
+        logger.info("\n=== Cleaning up S3 bucket contents ===")
+        s3_cleanup_cmd = CommandRunner(
+            command_root="aws",
+            command_args={
+                "s3": None,
+                "rm": None,
+                "s3://test-large-snapshot-bucket/es56-10tb-snapshot/": None,
+                "--recursive": None
+            }
         )
-        
+        result = s3_cleanup_cmd.run()
+        assert result.returncode == 0, f"Failed to clean up S3 bucket: {result.stderr}"
+        logger.info("Successfully cleaned up S3 bucket contents")
+
         logger.info("\n=== Creating Final Snapshot ===")
         final_snapshot_config = {
             'snapshot_name': f'final-snapshot-{pytest.unique_id}',  # Use unique ID to avoid conflicts
@@ -438,4 +444,3 @@ class BackfillTest(unittest.TestCase):
 
         logger.info("\n=== Test Completed Successfully ===")
         logger.info("Document multiplication verified with correct count")
-        
