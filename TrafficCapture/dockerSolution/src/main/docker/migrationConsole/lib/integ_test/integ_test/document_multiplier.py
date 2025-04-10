@@ -3,17 +3,21 @@ import pytest
 import unittest
 import json
 from console_link.middleware.clusters import connection_check, clear_cluster, ConnectionResult
+import console_link.middleware.backfill as backfill_
 from console_link.models.cluster import Cluster, HttpMethod
 from console_link.models.backfill_base import Backfill
 from console_link.models.command_result import CommandResult
 from console_link.models.snapshot import Snapshot
 from console_link.cli import Context
 from console_link.models.snapshot import S3Snapshot  # Import S3Snapshot
+from console_link.models.backfill_rfs import RfsWorkersInProgress
 from .default_operations import DefaultOperationsLibrary
 from .common_utils import execute_api_call
 from datetime import datetime
 import time
 import shutil
+import boto3
+from urllib.parse import urlparse
 
 # Global configuration
 NUM_SHARDS = 10
@@ -292,6 +296,41 @@ class BackfillTest(unittest.TestCase):
         
         logger.warning("Backfill monitoring timed out after 30 attempts")
 
+    def delete_s3_bucket_contents(self, s3_uri: str):
+        """Delete all files from a specific S3 bucket URI"""
+        logger.info(f"\n=== Deleting contents from {s3_uri} ===")
+        
+        parsed_uri = urlparse(s3_uri)
+        bucket_name = parsed_uri.netloc
+        prefix = parsed_uri.path.lstrip('/')
+        s3_client = boto3.client('s3')
+        
+        try:
+            # List and delete all objects with the given prefix
+            paginator = s3_client.get_paginator('list_objects_v2')
+            objects_to_delete = []
+            
+            # Paginate through all objects
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                if 'Contents' in page:
+                    objects_to_delete.extend([{'Key': obj['Key']} for obj in page['Contents']])
+            
+            if objects_to_delete:
+                # Delete objects in batches of 1000 (S3 limit)
+                for i in range(0, len(objects_to_delete), 1000):
+                    batch = objects_to_delete[i:i + 1000]
+                    s3_client.delete_objects(
+                        Bucket=bucket_name,
+                        Delete={'Objects': batch}
+                    )
+                logger.info(f"Successfully deleted {len(objects_to_delete)} objects from {s3_uri}")
+            else:
+                logger.info(f"No objects found in {s3_uri}")
+                
+        except Exception as e:
+            logger.error(f"Error deleting objects from {s3_uri}: {str(e)}")
+            raise
+
     def test_data_multiplication(self):
         """Monitor backfill progress and report final stats"""
         source = pytest.console_env.source_cluster
@@ -355,11 +394,30 @@ class BackfillTest(unittest.TestCase):
         assert stop_result.success, f"Failed to stop backfill: {stop_result.error}"
         logger.info("Backfill stopped successfully")
 
+        logger.info("Archiving the working state of the backfill operation...")
+        archive_result = backfill.archive()
+
+        while isinstance(archive_result.value, RfsWorkersInProgress):
+            logger.info("RFS Workers are still running, waiting for them to complete...")
+            time.sleep(5)
+            archive_result = backfill.archive()
+ 
+        assert archive_result.success, f"Failed to archive backfill: {archive_result.value}"
+        logger.info(f"Backfill working state archived to: {archive_result.value}")
+
         snapshot: Snapshot = pytest.console_env.snapshot
         assert snapshot is not None
         migrationAssistant_deployTimeRole = snapshot.config['s3']['role']
-        snapshot.delete()  
-        snapshot.delete_snapshot_repo() 
+        snapshot.delete()
+        snapshot.delete_snapshot_repo()
+
+        # Clean up S3 bucket contents
+        # self.delete_s3_bucket_contents('s3://test-large-snapshot-bucket/es56-10tb-snapshot/')
+        command_runner = pytest.console_env.command_runner
+        command_runner.run_command(
+            f"aws s3 rm s3://test-large-snapshot-bucket/es56-10tb-snapshot/ --recursive",
+            check=True
+        )
         
         logger.info("\n=== Creating Final Snapshot ===")
         final_snapshot_config = {
@@ -380,3 +438,4 @@ class BackfillTest(unittest.TestCase):
 
         logger.info("\n=== Test Completed Successfully ===")
         logger.info("Document multiplication verified with correct count")
+        
