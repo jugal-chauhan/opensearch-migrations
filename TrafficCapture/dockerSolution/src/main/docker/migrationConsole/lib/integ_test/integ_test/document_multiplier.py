@@ -359,8 +359,8 @@ class BackfillTest(unittest.TestCase):
         assert snapshot is not None
         migrationAssistant_deployTimeRole = snapshot.config['s3']['role']
         snapshot.delete()  
-        snapshot.delete_repo() 
-
+        snapshot.delete_snapshot_repo() 
+        
         logger.info("\n=== Creating Final Snapshot ===")
         final_snapshot_config = {
             'snapshot_name': f'final-snapshot-{pytest.unique_id}',  # Use unique ID to avoid conflicts
