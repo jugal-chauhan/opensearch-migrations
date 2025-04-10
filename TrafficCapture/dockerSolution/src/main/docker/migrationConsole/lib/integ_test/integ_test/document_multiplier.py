@@ -358,6 +358,8 @@ class BackfillTest(unittest.TestCase):
         snapshot: Snapshot = pytest.console_env.snapshot
         assert snapshot is not None
         migrationAssistant_deployTimeRole = snapshot.config['s3']['role']
+        snapshot.delete()  
+        snapshot.delete_repo() 
 
         logger.info("\n=== Creating Final Snapshot ===")
         final_snapshot_config = {
@@ -369,7 +371,6 @@ class BackfillTest(unittest.TestCase):
             }
         }
         final_snapshot = S3Snapshot(final_snapshot_config, pytest.console_env.source_cluster)
-        final_snapshot.delete()  # Delete any existing snapshot with the same name from S3
         final_snapshot_result: CommandResult = final_snapshot.create(
             wait=True,
             max_snapshot_rate_mb_per_node=2000
