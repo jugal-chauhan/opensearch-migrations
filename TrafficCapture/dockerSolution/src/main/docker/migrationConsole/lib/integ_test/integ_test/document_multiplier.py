@@ -91,7 +91,7 @@ def preload_data(source_cluster: Cluster):
         }
     }
 
-    pilot_index = f"largetest_{pytest.unique_id}"
+    pilot_index = f"pilot_index"
     logger.info("Creating index %s with settings: %s", pilot_index, index_settings_es56)
     ops.create_index_es56(cluster=source_cluster, index_name=pilot_index, data=json.dumps(index_settings_es56))
     
