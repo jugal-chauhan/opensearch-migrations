@@ -327,12 +327,12 @@ class BackfillTest(unittest.TestCase):
         logger.info("\n=== Final Cluster Stats ===")
         final_doc_count, final_index_size = self.get_cluster_stats(source, index_name)
         
-        logger.info("\nSource Cluster:")
+        logger.info("\nInitial Cluster Stats:")
         logger.info(f"- Index: {index_name}")
         logger.info(f"- Total Documents: {initial_doc_count:,}")
         logger.info(f"- Total Size: {initial_index_size:.2f} MB")
         
-        logger.info("\nTarget Cluster:")
+        logger.info("\nFinal Cluster Stats:")
         logger.info(f"- Index: {index_name}")
         logger.info(f"- Total Documents: {final_doc_count:,}")
         logger.info(f"- Total Size: {final_index_size:.2f} MB")
@@ -394,7 +394,7 @@ class BackfillTest(unittest.TestCase):
             wait=True,
             max_snapshot_rate_mb_per_node=2000
         )
-        assert final_snapshot_result.success
+        assert final_snapshot_result.success, f"Failed to create final snapshot: {final_snapshot_result.error}"
         logger.info("Final Snapshot after migration and multiplication was created successfully")
 
         logger.info("\n=== Test Completed Successfully ===")
