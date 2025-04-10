@@ -377,7 +377,7 @@ class BackfillTest(unittest.TestCase):
             }
         )
         result = s3_cleanup_cmd.run()
-        assert result.returncode == 0, f"Failed to clean up S3 bucket: {result.stderr}"
+        assert result.success, f"Failed to clean up S3 bucket: {result.display()}"
         logger.info("Successfully cleaned up S3 bucket contents")
 
         logger.info("\n=== Creating Final Snapshot ===")
