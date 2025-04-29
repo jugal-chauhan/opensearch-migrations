@@ -2,9 +2,12 @@ package org.opensearch.migrations.bulkload.models;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.zip.Inflater;
+import java.util.zip.InflaterInputStream;
 
 import org.opensearch.migrations.bulkload.common.ByteArrayIndexInput;
 import org.opensearch.migrations.bulkload.common.RfsException;
@@ -14,6 +17,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.smile.SmileFactory;
 import shadow.lucene9.org.apache.lucene.codecs.CodecUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Defines the behavior expected of an object that will surface the metadata of an shard stored in a snapshot
@@ -22,6 +27,7 @@ import shadow.lucene9.org.apache.lucene.codecs.CodecUtil;
  */
 public interface ShardMetadata {
 
+    Logger logger = LoggerFactory.getLogger(ShardMetadata.class);
     public String getSnapshotName();
 
     public String getIndexName();
@@ -60,9 +66,14 @@ public interface ShardMetadata {
                 CodecUtil.checkHeader(indexInput, "snapshot", 1, 1);
                 int filePointer = (int) indexInput.getFilePointer();
                 InputStream bis = new ByteArrayInputStream(bytes, filePointer, bytes.length - filePointer);
-
+                InputStream compressedInput = new ByteArrayInputStream(bytes, filePointer, bytes.length - filePointer);
+                byte[] dflHeader = new byte[4];
+                if (compressedInput.read(dflHeader) != 4 || dflHeader[0] != 'D' || dflHeader[1] != 'F' || dflHeader[2] != 'L' || dflHeader[3] != 0) {
+                    throw new IOException("Invalid DFL header in compressed metadata");
+                }
+                InflaterInputStream inflaterInput = new InflaterInputStream(compressedInput, new Inflater(true));
                 ObjectMapper smileMapper = new ObjectMapper(smileFactory);
-                return smileMapper.readTree(bis);
+                return smileMapper.readTree(inflaterInput);
             } catch (Exception e) {
                 throw new CouldNotParseShardMetadata(
                     "Could not parse shard metadata for Snapshot "

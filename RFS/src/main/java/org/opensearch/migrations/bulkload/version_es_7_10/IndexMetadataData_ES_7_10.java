@@ -9,6 +9,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @NoArgsConstructor(force = true) // For Jackson
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.NONE, getterVisibility = JsonAutoDetect.Visibility.NONE)
@@ -25,6 +27,7 @@ public class IndexMetadataData_ES_7_10 extends IndexMetadata {
     @Getter
     @JsonProperty("name")
     private final String name;
+    private static final Logger logger = LoggerFactory.getLogger(IndexMetadataData_ES_7_10.class);
 
     public IndexMetadataData_ES_7_10(ObjectNode root, String indexId, String indexName) {
         this.rawJson = root;

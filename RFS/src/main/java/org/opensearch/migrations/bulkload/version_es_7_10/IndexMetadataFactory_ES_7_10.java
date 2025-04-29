@@ -7,8 +7,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.smile.SmileFactory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class IndexMetadataFactory_ES_7_10 implements IndexMetadata.Factory {
     private final SnapshotRepo.Provider repoDataProvider;
+    private static final Logger logger = LoggerFactory.getLogger(IndexMetadataFactory_ES_7_10.class);
 
     public IndexMetadataFactory_ES_7_10(SnapshotRepo.Provider repoDataProvider) {
         this.repoDataProvider = repoDataProvider;
@@ -16,6 +20,7 @@ public class IndexMetadataFactory_ES_7_10 implements IndexMetadata.Factory {
 
     @Override
     public IndexMetadata fromJsonNode(JsonNode root, String indexId, String indexName) {
+        logger.info("Full metadata structure for {}:\n{}", indexName, root.toPrettyString());
         ObjectNode objectNodeRoot = (ObjectNode) root.get(indexName);
         return new IndexMetadataData_ES_7_10(objectNodeRoot, indexId, indexName);
     }

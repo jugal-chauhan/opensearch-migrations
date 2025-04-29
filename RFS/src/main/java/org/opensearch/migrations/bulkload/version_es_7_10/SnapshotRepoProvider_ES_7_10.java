@@ -10,6 +10,7 @@ import org.opensearch.migrations.bulkload.common.SourceRepo;
 public class SnapshotRepoProvider_ES_7_10 implements SnapshotRepo.Provider {
     private final SourceRepo repo;
     private SnapshotRepoData_ES_7_10 repoData = null;
+    private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SnapshotRepoProvider_ES_7_10.class);
 
     public SnapshotRepoProvider_ES_7_10(SourceRepo repo) {
         this.repo = repo;
@@ -75,8 +76,10 @@ public class SnapshotRepoProvider_ES_7_10 implements SnapshotRepo.Provider {
     public String getIndexMetadataId(String snapshotName, String indexName) {
         String indexId = getIndexId(indexName);
         if (indexId == null) {
+            logger.error("Index {} not found", indexName);
             return null;
         }
+        logger.info("Found index ID {} for index {}", indexId, indexName);
 
         String metadataLookupKey = getRepoData().getSnapshots().stream()
             .filter(snapshot -> snapshot.getName().equals(snapshotName))
@@ -84,8 +87,16 @@ public class SnapshotRepoProvider_ES_7_10 implements SnapshotRepo.Provider {
             .findFirst()
             .orElse(null);
         if (metadataLookupKey == null) {
+            logger.error("Could not find metadata lookup key for index {} (ID: {}) in snapshot {}", indexName, indexId, snapshotName);
             return null;
         }
+
+        String metadataId = getRepoData().getIndexMetadataIdentifiers().get(metadataLookupKey);
+        if (metadataId == null) {
+            logger.error("Could not find metadata ID for index {} (ID: {}) in snapshot {}", indexName, indexId, snapshotName);
+            return null;
+        }
+        logger.info("Found metadata ID {} for index {} (ID: {}) in snapshot {}", metadataId, indexName, indexId, snapshotName);
 
         return getRepoData().getIndexMetadataIdentifiers().get(metadataLookupKey);
     }

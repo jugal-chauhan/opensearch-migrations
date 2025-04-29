@@ -16,8 +16,8 @@ public class SupportedClusters {
     public static List<ContainerVersion> sources() {
         return List.of(
             // Include ES 8.17.5 for testing
-            SearchClusterContainer.ES_V8_17
             // SearchClusterContainer.ES_V7_17,
+            SearchClusterContainer.ES_V8_17
             // SearchClusterContainer.ES_V7_10_2,
             // SearchClusterContainer.ES_V6_8_23,
             // SearchClusterContainer.ES_V5_6_16,
