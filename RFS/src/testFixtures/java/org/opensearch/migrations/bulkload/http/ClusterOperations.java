@@ -138,6 +138,21 @@ public class ClusterOperations {
         }
     }
 
+    // Add this method to your ClusterOperations class
+    @SneakyThrows
+    public void disableBloom(final String index) {
+        final String body = "{" +
+            "  \"index\": {" +
+            "    \"bloom_filter_for_id_field\": {" +
+            "      \"enabled\": false" +
+            "    }" +
+            "  }" +
+            "}";
+        
+        var response = put("/" + index + "/_settings", body);
+        assertThat(response.getKey(), equalTo(200));
+    }    
+
     @SneakyThrows
     public Map.Entry<Integer, String> post(final String path, final String body) {
         final var postRequest = new HttpPost(clusterUrl + path);
