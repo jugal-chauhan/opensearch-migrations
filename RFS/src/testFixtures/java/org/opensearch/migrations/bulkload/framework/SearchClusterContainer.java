@@ -254,7 +254,9 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
 
     public static class ElasticsearchVersion extends ContainerVersion {
         public ElasticsearchVersion(String imageName, Version version) {
-            super(imageName, version, INITIALIZATION_FLAVOR.ELASTICSEARCH, "elasticsearch");
+            super(imageName, version,
+                    version.toString().startsWith("ES 8.") ? INITIALIZATION_FLAVOR.ELASTICSEARCH_8 : INITIALIZATION_FLAVOR.ELASTICSEARCH,
+                    "elasticsearch");
         }
     }
 
