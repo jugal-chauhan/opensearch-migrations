@@ -263,35 +263,35 @@ public class ClusterOperations {
 
         if (isES8) {
             templateJson +=
-                    "    \"dynamic\": false,\n" +
-                            "    \"_source\": {\n" +
-                            "      \"enabled\": true\n" +
-                            "    },\n" +
-                            "    \"properties\": {\n" +
-                            "      \"host_name\": {\n" +
-                            "        \"type\": \"keyword\"\n" +
-                            "      },\n" +
-                            "      \"created_at\": {\n" +
-                            "        \"type\": \"date\",\n" +
-                            "        \"format\": \"EEE MMM dd HH:mm:ss Z yyyy\"\n" +
-                            "      }\n" +
-                            "    }\n";
+                "    \"dynamic\": false,\n" +
+                "    \"_source\": {\n" +
+                "      \"enabled\": true\n" +
+                "    },\n" +
+                "    \"properties\": {\n" +
+                "      \"host_name\": {\n" +
+                "        \"type\": \"keyword\"\n" +
+                "      },\n" +
+                "      \"created_at\": {\n" +
+                "        \"type\": \"date\",\n" +
+                "        \"format\": \"EEE MMM dd HH:mm:ss Z yyyy\"\n" +
+                "      }\n" +
+                "    }\n";
         } else {
             templateJson +=
-                    "    \"" + defaultDocType() + "\": {\n" +
-                            "      \"_source\": {\n" +
-                            "        \"enabled\": true\n" +
-                            "      },\n" +
-                            "      \"properties\": {\n" +
-                            "        \"host_name\": {\n" +
-                            "          \"type\": \"keyword\"\n" +
-                            "        },\n" +
-                            "        \"created_at\": {\n" +
-                            "          \"type\": \"date\",\n" +
-                            "          \"format\": \"EEE MMM dd HH:mm:ss Z yyyy\"\n" +
-                            "        }\n" +
-                            "      }\n" +
-                            "    }\n";
+                "    \"" + defaultDocType() + "\": {\n" +
+                "      \"_source\": {\n" +
+                "        \"enabled\": true\n" +
+                "      },\n" +
+                "      \"properties\": {\n" +
+                "        \"host_name\": {\n" +
+                "          \"type\": \"keyword\"\n" +
+                "        },\n" +
+                "        \"created_at\": {\n" +
+                "          \"type\": \"date\",\n" +
+                "          \"format\": \"EEE MMM dd HH:mm:ss Z yyyy\"\n" +
+                "        }\n" +
+                "      }\n" +
+                "    }\n";
         }
 
         // Close JSON

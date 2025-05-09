@@ -44,13 +44,13 @@ class EndToEndTest extends BaseMigrationTest {
 
     private static Stream<Arguments> scenarios() {
         return SupportedClusters.supportedPairs(false).stream()
-            .filter(pair -> !VersionMatchers.isES_8_X.test(pair.source().getVersion()))
             .flatMap(pair -> {
                 List<TemplateType> templateTypes = Stream.concat(
                             (VersionMatchers.isOS_2_X.test(pair.source().getVersion())
                                     ? Stream.empty()
                                     : Stream.of(TemplateType.Legacy)),
                             (VersionMatchers.equalOrGreaterThanES_7_10.test(pair.source().getVersion())
+                                    || VersionMatchers.isES_8_X.test(pair.source().getVersion())
                                     ? Stream.of(TemplateType.Index, TemplateType.IndexAndComponent)
                                     : Stream.empty()))
                     .toList();
@@ -104,6 +104,7 @@ class EndToEndTest extends BaseMigrationTest {
             String fieldName = "author_" + uniqueSuffix;
 
             if (templateType == TemplateType.Legacy) {
+                log.error("LEGACY template at version");
                 sourceOperations.createLegacyTemplate(templateName, indexPattern);
                 testData.aliasNames.add("alias_legacy");
             } else if (templateType == TemplateType.Index) {
