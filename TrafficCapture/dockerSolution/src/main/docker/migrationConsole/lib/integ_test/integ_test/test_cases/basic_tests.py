@@ -20,6 +20,7 @@ class Test0001SingleDocumentBackfill(MATestBase):
                          description=description,
                          migrations_required=migrations_required,
                          allow_source_target_combinations=allow_combinations)
+        self.transform_config_file = "/shared-logs-output/test-transformations/transformation.json"
         self.index_name = f"test_0001_{self.unique_id}"
         self.doc_id = "test_0001_doc"
 
@@ -28,6 +29,9 @@ class Test0001SingleDocumentBackfill(MATestBase):
         self.source_operations.create_document(cluster=self.source_cluster, index_name=self.index_name,
                                                doc_id=self.doc_id)
         self.source_operations.get_document(cluster=self.source_cluster, index_name=self.index_name, doc_id=self.doc_id)
+        transformation_applied = self.source_operations.get_noop_transformation()
+        self.source_operations.create_transformation_json_file(transform_config_data=[transformation_applied],
+                                                                       file_path_to_create=self.transform_config_file)
 
     def backfill_during(self):
         # Validate single document exists on target

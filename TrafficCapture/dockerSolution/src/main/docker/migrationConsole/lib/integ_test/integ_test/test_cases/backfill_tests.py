@@ -51,14 +51,20 @@ class Test0006OpenSearchBenchmarkBackfill(MATestBase):
     def test_before(self):
         self.source_operations.run_test_benchmarks(cluster=self.source_cluster)
         # Current test structure requires a transformation config
-        union_transform = self.source_operations.get_type_mapping_only_union_transformation(
-            cluster_version=self.source_version
-        )
-        self.source_operations.create_transformation_json_file(transform_config_data=[union_transform],
+        if self.source_version.major_version == 5:
+            logger.info("Detected ES 5.x version, using TypeMappingSanitizationTransformerProvider.")
+            transformation_applied = self.source_operations.get_type_mapping_only_union_transformation(
+                cluster_version=self.source_version
+            )
+        elif self.source_version.major_version == 8:
+            logger.info("Detected ES 8.x version, using NoopTransformerProvider.")
+            transformation_applied = self.source_operations.get_noop_transformation()
+        self.source_operations.create_transformation_json_file(transform_config_data=[transformation_applied],
                                                                file_path_to_create=self.transform_config_file)
 
     def metadata_migrate(self):
-        metadata_result: CommandResult = self.metadata.migrate(extra_args=["--multi-type-behavior", "UNION"])
+        index_allowlist_arg = ",".join(full_indices.keys())
+        metadata_result: CommandResult = self.metadata.migrate(extra_args=["--multi-type-behavior", "UNION", "--index-allowlist", index_allowlist_arg])
         assert metadata_result.success
 
     def metadata_after(self):
