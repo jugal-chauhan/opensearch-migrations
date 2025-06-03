@@ -10,12 +10,14 @@ import org.opensearch.migrations.bulkload.common.SnapshotRepo;
 import org.opensearch.migrations.bulkload.common.SnapshotRepo.CantParseRepoFile;
 import org.opensearch.migrations.bulkload.common.SourceRepo;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SnapshotRepoData_ES_6_8 {
 
     public static SnapshotRepoData_ES_6_8 fromRepoFile(Path filePath) {
@@ -47,6 +49,7 @@ public class SnapshotRepoData_ES_6_8 {
     @Getter
     private Map<String, RawIndex> indices;
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     @Getter
     @AllArgsConstructor
     @NoArgsConstructor
@@ -61,6 +64,7 @@ public class SnapshotRepoData_ES_6_8 {
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     @Getter
     @AllArgsConstructor
     @NoArgsConstructor
