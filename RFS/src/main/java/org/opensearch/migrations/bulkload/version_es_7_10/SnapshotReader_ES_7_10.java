@@ -21,6 +21,7 @@ public class SnapshotReader_ES_7_10 implements ClusterSnapshotReader {
             .or(VersionMatchers.isES_8_X)
             .or(VersionMatchers.isOS_1_X)
             .or(VersionMatchers.isOS_2_X)
+            .or(VersionMatchers.isES_7_9_X)
             .test(version);
     }
 

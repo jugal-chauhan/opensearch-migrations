@@ -55,6 +55,29 @@ public class VersionMatchers {
             .test(other);
     }
 
+    static int compareVersions(Version v1, Version v2) {
+        if (v1.getMajor() != v2.getMajor()) {
+            return Integer.compare(v1.getMajor(), v2.getMajor());
+        }
+        if (v1.getMinor() != v2.getMinor()) {
+            return Integer.compare(v1.getMinor(), v2.getMinor());
+        }
+        return Integer.compare(v1.getPatch(), v2.getPatch());
+    }
+
+    static Predicate<Version> inclusiveVersionRange(String minVersionInclusiveStr, String maxVersionInclusiveStr) {
+        Version minVersion = Version.fromString(minVersionInclusiveStr);
+        Version maxVersion = Version.fromString(maxVersionInclusiveStr);
+        return v -> {
+            if (v == null) {
+                return false;
+            }
+            int compareToMin = compareVersions(v, minVersion);
+            int compareToMax = compareVersions(v, maxVersion);
+            return compareToMin >= 0 && compareToMax <= 0;
+        };
+    }
+
     static Predicate<Version> equalOrGreaterThanMinorVersion(final Version version) {
         return other -> matchesMajorVersion(version)
             .and(other2 -> version.getMinor() <= other2.getMinor())

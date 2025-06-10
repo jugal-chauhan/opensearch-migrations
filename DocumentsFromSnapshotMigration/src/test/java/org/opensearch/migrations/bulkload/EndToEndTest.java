@@ -34,10 +34,10 @@ public class EndToEndTest extends SourceTestBase {
     @TempDir
     private File localDirectory;
 
-    private static Stream<Arguments> scenarios() {
-        return SupportedClusters.supportedPairs(true).stream()
-                .map(migrationPair -> Arguments.of(migrationPair.source(), migrationPair.target()));
-    }
+     private static Stream<Arguments> scenarios() {
+         return SupportedClusters.supportedPairs(true).stream()
+                 .map(migrationPair -> Arguments.of(migrationPair.source(), migrationPair.target()));
+     }
 
     @ParameterizedTest(name = "Source {0} to Target {1}")
     @MethodSource(value = "scenarios")
@@ -55,6 +55,7 @@ public class EndToEndTest extends SourceTestBase {
     private static Stream<Arguments> extendedScenarios() {
         return SupportedClusters.extendedSources().stream().map(s -> Arguments.of(s));
     }
+
     @ParameterizedTest(name = "Source {0} to Target OS 2.19")
     @MethodSource(value = "extendedScenarios")
     public void extendedMigrationDocuments(
