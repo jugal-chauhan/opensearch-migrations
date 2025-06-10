@@ -35,10 +35,10 @@ public class EndToEndTest extends SourceTestBase {
     @TempDir
     private File localDirectory;
 
-    private static Stream<Arguments> scenarios() {
-        return SupportedClusters.supportedPairs(true).stream()
-                .map(migrationPair -> Arguments.of(migrationPair.source(), migrationPair.target()));
-    }
+     private static Stream<Arguments> scenarios() {
+         return SupportedClusters.supportedPairs(true).stream()
+                 .map(migrationPair -> Arguments.of(migrationPair.source(), migrationPair.target()));
+     }
 
     @ParameterizedTest(name = "Source {0} to Target {1}")
     @MethodSource(value = "scenarios")
@@ -88,9 +88,13 @@ public class EndToEndTest extends SourceTestBase {
             // Number of default shards is different across different versions on ES/OS.
             // So we explicitly set it.
             var sourceVersion = sourceCluster.getContainerVersion().getVersion();
+<<<<<<< Updated upstream
             boolean supportsSoftDeletes =
                 sourceVersion.getMajor() > 6 ||
                 (sourceVersion.getMajor() == 6 && sourceVersion.getMinor() >= 5);
+=======
+            boolean supportsSoftDeletes = VersionMatchers.equalOrGreaterThanES_6_5.test(sourceVersion);
+>>>>>>> Stashed changes
             String body = String.format(
                 "{" +
                 "  \"settings\": {" +

@@ -259,7 +259,7 @@ public class ClusterOperations {
         var extraParameters = (
                 VersionMatchers.isES_5_X
                         .or(VersionMatchers.isES_8_X)
-                        .or(VersionMatchers.isES_6_0_to_6_5)
+                        .or(VersionMatchers.isES_6_X)
             ).test(clusterVersion)
                     ? ""
                     : "?include_type_name=true";
@@ -382,7 +382,7 @@ public class ClusterOperations {
     }
 
     private String defaultDocType() {
-        if (VersionMatchers.isES_5_X.or(VersionMatchers.isES_2_X).test(clusterVersion)) {
+        if (VersionMatchers.isES_5_X.or(VersionMatchers.isES_2_X).or(VersionMatchers.isES_6_0_to_6_1).test(clusterVersion)) {
             return "doc";
         }
         return "_doc";
