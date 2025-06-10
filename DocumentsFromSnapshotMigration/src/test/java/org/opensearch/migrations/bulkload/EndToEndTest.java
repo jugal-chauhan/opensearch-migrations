@@ -6,7 +6,6 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-import org.opensearch.migrations.UnboundVersionMatchers;
 import org.opensearch.migrations.VersionMatchers;
 import org.opensearch.migrations.bulkload.common.FileSystemRepo;
 import org.opensearch.migrations.bulkload.common.FileSystemSnapshotCreator;
@@ -56,13 +55,14 @@ public class EndToEndTest extends SourceTestBase {
     private static Stream<Arguments> extendedScenarios() {
         return SupportedClusters.extendedSources().stream().map(s -> Arguments.of(s));
     }
-    @ParameterizedTest(name = "Source {0} to Target OS 3.0")
+
+    @ParameterizedTest(name = "Source {0} to Target OS 2.19")
     @MethodSource(value = "extendedScenarios")
     public void extendedMigrationDocuments(
             final SearchClusterContainer.ContainerVersion sourceVersion) {
         try (
                 final var sourceCluster = new SearchClusterContainer(sourceVersion);
-                final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V3_0_0)
+                final var targetCluster = new SearchClusterContainer(SearchClusterContainer.OS_V2_19_1)
         ) {
             migrationDocumentsWithClusters(sourceCluster, targetCluster);
         }
@@ -88,13 +88,7 @@ public class EndToEndTest extends SourceTestBase {
             // Number of default shards is different across different versions on ES/OS.
             // So we explicitly set it.
             var sourceVersion = sourceCluster.getContainerVersion().getVersion();
-<<<<<<< Updated upstream
-            boolean supportsSoftDeletes =
-                sourceVersion.getMajor() > 6 ||
-                (sourceVersion.getMajor() == 6 && sourceVersion.getMinor() >= 5);
-=======
             boolean supportsSoftDeletes = VersionMatchers.equalOrGreaterThanES_6_5.test(sourceVersion);
->>>>>>> Stashed changes
             String body = String.format(
                 "{" +
                 "  \"settings\": {" +

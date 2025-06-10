@@ -74,20 +74,20 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
             Version.fromString("ES 6.4.3")
     );
     public static final ContainerVersion ES_V6_3 = new ElasticsearchOssVersion(
-            "docker.elastic.co/elasticsearch/elasticsearch:6.3.2", // TODO: Doesn't resolve
+            "docker.elastic.co/elasticsearch/elasticsearch:6.3.2",
             Version.fromString("ES 6.3")
     );
     public static final ContainerVersion ES_V6_2 = new ElasticsearchOssVersion(
-            "elasticsearch-oss:6.2.4",  // Matches your local image
-            Version.fromString("ES 6.2.4")  // Must match image tag for fallback lookup
+            "elasticsearch-oss:6.2.4",  // Matches local image
+            Version.fromString("ES 6.2.4")
     );
     public static final ContainerVersion ES_V6_1 = new ElasticsearchOssVersion(
-            "elasticsearch-oss:6.1.4",  // Matches your local image
-            Version.fromString("ES 6.1.4")  // <-- not ES 6.1
+            "elasticsearch-oss:6.1.4",  // Matches local image
+            Version.fromString("ES 6.1.4")
     );
     public static final ContainerVersion ES_V6_0 = new ElasticsearchOssVersion(
-            "elasticsearch-oss:6.0.1",  // Matches your local image
-            Version.fromString("ES 6.0.1")  // <-- not ES 6.0
+            "elasticsearch-oss:6.0.1",  // Matches local image
+            Version.fromString("ES 6.0.1")
     );
 
     public static final ContainerVersion ES_V5_6_16 = new Elasticsearch5Version(

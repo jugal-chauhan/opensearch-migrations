@@ -48,6 +48,19 @@ public class SupportedClusters {
         );
     }
 
+    public static List<ContainerVersion> extendedSources() {
+        return List.of(
+                SearchClusterContainer.ES_V7_9,
+                SearchClusterContainer.ES_V7_8,
+                SearchClusterContainer.ES_V7_7,
+                SearchClusterContainer.ES_V7_4,
+                SearchClusterContainer.ES_V7_1,
+                SearchClusterContainer.ES_V6_7,
+                SearchClusterContainer.ES_V6_5,
+                SearchClusterContainer.ES_V6_4
+        );
+    }
+
     private static List<ContainerVersion> targets() {
         return List.of(
             SearchClusterContainer.OS_V1_3_16,
