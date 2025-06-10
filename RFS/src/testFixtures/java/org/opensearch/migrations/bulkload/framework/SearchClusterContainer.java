@@ -74,9 +74,21 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
             Version.fromString("ES 6.4.3")
     );
 
-    public static final ContainerVersion ES_V5_6_16 = new ElasticsearchVersion(
+    public static final ContainerVersion ES_V5_6_16 = new Elasticsearch5Version(
         "docker.elastic.co/elasticsearch/elasticsearch:5.6.16",
         Version.fromString("ES 5.6.16")
+    );
+    public static final ContainerVersion ES_V5_5 = new Elasticsearch5Version(
+            "docker.elastic.co/elasticsearch/elasticsearch:5.5.2",
+            Version.fromString("ES 5.5.2")
+    );
+    public static final ContainerVersion ES_V5_3 = new Elasticsearch5Version(
+            "docker.elastic.co/elasticsearch/elasticsearch:5.3.2",
+            Version.fromString("ES 5.3.2")
+    );
+    public static final ContainerVersion ES_V5_1 = new Elasticsearch5Version(
+            "docker.elastic.co/elasticsearch/elasticsearch:5.1.2",
+            Version.fromString("ES 5.1.2")
     );
 
     public static final ContainerVersion ES_V2_4_6 = new OlderElasticsearchVersion(
@@ -115,6 +127,14 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
                 .build()),
         ELASTICSEARCH_OSS(
             new ImmutableMap.Builder<String, String>().putAll(BASE.getEnvVariables())
+                .put("bootstrap.system_call_filter", "false")
+                .build()),
+        ELASTICSEARCH_5(
+            new ImmutableMap.Builder<String, String>().putAll(BASE.getEnvVariables())
+                .put("xpack.security.enabled", "false")
+                .put("xpack.watcher.enabled", "false")
+                .put("xpack.monitoring.enabled", "false")
+                .put("xpack.ml.enabled", "false")
                 .put("bootstrap.system_call_filter", "false")
                 .build()),
         ELASTICSEARCH_8(
@@ -295,6 +315,12 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
     public static class ElasticsearchVersion extends ContainerVersion {
         public ElasticsearchVersion(String imageName, Version version) {
             super(imageName, version, INITIALIZATION_FLAVOR.ELASTICSEARCH, "elasticsearch");
+        }
+    }
+
+    public static class Elasticsearch5Version extends ContainerVersion {
+        public Elasticsearch5Version(String imageName, Version version) {
+            super(imageName, version, INITIALIZATION_FLAVOR.ELASTICSEARCH_5, "elasticsearch");
         }
     }
 
