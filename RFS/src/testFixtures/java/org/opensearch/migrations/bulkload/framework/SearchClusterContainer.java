@@ -74,19 +74,19 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
             Version.fromString("ES 6.4.3")
     );
 
-    public static final ContainerVersion ES_V5_6_16 = new Elasticsearch5Version(
+    public static final ContainerVersion ES_V5_6_16 = new ElasticsearchVersion(
         "docker.elastic.co/elasticsearch/elasticsearch:5.6.16",
         Version.fromString("ES 5.6.16")
     );
-    public static final ContainerVersion ES_V5_5 = new Elasticsearch5Version(
+    public static final ContainerVersion ES_V5_5 = new ElasticsearchVersion(
             "docker.elastic.co/elasticsearch/elasticsearch:5.5.2",
             Version.fromString("ES 5.5.2")
     );
-    public static final ContainerVersion ES_V5_3 = new Elasticsearch5Version(
+    public static final ContainerVersion ES_V5_3 = new ElasticsearchOssVersion(
             "docker.elastic.co/elasticsearch/elasticsearch:5.3.2",
             Version.fromString("ES 5.3.2")
     );
-    public static final ContainerVersion ES_V5_1 = new Elasticsearch5Version(
+    public static final ContainerVersion ES_V5_1 = new ElasticsearchOssVersion(
             "docker.elastic.co/elasticsearch/elasticsearch:5.1.2",
             Version.fromString("ES 5.1.2")
     );
@@ -118,7 +118,8 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         BASE(Map.of("discovery.type", "single-node",
             "path.repo", CLUSTER_SNAPSHOT_DIR,
             "ES_JAVA_OPTS", "-Xms2g -Xmx2g",
-            "index.store.type", "mmapfs"
+            "index.store.type", "mmapfs",
+            "bootstrap.system_call_filter", "false"
         )),
         ELASTICSEARCH(
             new ImmutableMap.Builder<String, String>().putAll(BASE.getEnvVariables())
@@ -188,7 +189,7 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         }
 
         builder.withEnv(version.getInitializationType().getEnvVariables())
-            .waitingFor(Wait.forHttp("/").forPort(9200).forStatusCode(200).withStartupTimeout(Duration.ofMinutes(1)));
+            .waitingFor(Wait.forHttp("/").forPort(9200).forStatusCode(200).withStartupTimeout(Duration.ofMinutes(3)));
 
         this.containerVersion = version;
     }
@@ -202,7 +203,7 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
                                         supplementaryEnvVariables
                                     ).build();
         builder.withEnv(combinedEnvVariables)
-                .waitingFor(Wait.forHttp("/").forPort(9200).forStatusCode(200).withStartupTimeout(Duration.ofMinutes(1)));
+                .waitingFor(Wait.forHttp("/").forPort(9200).forStatusCode(200).withStartupTimeout(Duration.ofMinutes(3)));
         this.containerVersion = version;
     }
 
