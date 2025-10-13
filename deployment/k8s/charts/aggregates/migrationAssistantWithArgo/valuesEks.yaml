@@ -1,5 +1,5 @@
 conditionalPackageInstalls:
-  localstack: false
+  localstack: true
   jaeger: false
 
 aws:
@@ -8,10 +8,10 @@ aws:
   account: ""
 
 defaultBucketConfiguration:
-  useLocalStack: false
+  useLocalStack: true
   deleteOnUninstall: true
   emptyBeforeDelete: true
-  endpoint: ""
+  endpoint: localstack
 
 # Useful for updating images while developing
 #images:

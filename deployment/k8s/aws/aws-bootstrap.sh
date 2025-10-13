@@ -17,9 +17,9 @@ org_name="opensearch-project"
 repo_name="opensearch-migrations"
 branch="main"
 tag=""
-skip_git_pull=false
+skip_git_pull=true
 
-base_dir="./opensearch-migrations"
+base_dir="../../../../opensearch-migrations"
 build_images_chart_dir="${base_dir}/deployment/k8s/charts/components/buildImages"
 ma_chart_dir="${base_dir}/deployment/k8s/charts/aggregates/migrationAssistantWithArgo"
 namespace="ma"
@@ -270,6 +270,8 @@ else
     --set images.installer.tag=$RELEASE_VERSION"
 fi
 
+set -x
+echo "Testing ......."
 echo "Installing Migration Assistant chart now, this can take a couple minutes..."
 helm install "$namespace" "${ma_chart_dir}" \
   --namespace $namespace \
