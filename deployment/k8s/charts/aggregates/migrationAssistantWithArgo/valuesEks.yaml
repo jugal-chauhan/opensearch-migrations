@@ -64,18 +64,6 @@ otelConfiguration:
         dimension_rollup_option: NoDimensionRollup # Reduce number of metrics by only publishing with all dimensions
         resource_to_telemetry_conversion:
           enabled: true
-        metric_declarations:
-          - dimensions: [[namespace, pod, container]]
-            metric_name_selectors:
-              - container_cpu_usage_seconds_total
-              - container_memory_working_set_bytes
-          - dimensions: [[namespace, pod]]
-            metric_name_selectors:
-              - container_cpu_usage_seconds_total
-              - container_memory_working_set_bytes
-          - dimensions: [[namespace]]
-            metric_name_selectors:
-              - kube_deployment_status_replicas_available
       prometheus:
         endpoint: "0.0.0.0:8889"
         send_timestamps: true
