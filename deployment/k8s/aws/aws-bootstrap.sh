@@ -13,9 +13,9 @@
 #   Save & run:   curl -s -o aws-bootstrap.sh https://raw.githubusercontent.com/opensearch-project/opensearch-migrations/main/deployment/k8s/aws/aws-bootstrap.sh && chmod +x aws-bootstrap.sh && ./aws-bootstrap.sh
 # -----------------------------------------------------------------------------
 # --- defaults ---
-org_name="opensearch-project"
+org_name="jugal-chauhan"
 repo_name="opensearch-migrations"
-branch="main"
+branch="experiment-eks-ma-dashboard"
 tag=""
 skip_git_pull=true
 
