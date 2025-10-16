@@ -34,17 +34,41 @@ otelConfiguration:
         protocols:
           grpc:
             endpoint: 0.0.0.0:4317
+      kubeletstats:
+        collection_interval: 60s
+        auth_type: serviceAccount
+        insecure_skip_verify: true
+        metric_groups: [container, pod]
+        metrics:
+          container.cpu.time:            { enabled: true }   # cumulative seconds
+          container.cpu.limit:           { enabled: true }   # cores
+          container.memory.usage:        { enabled: true }   # bytes
+          container.memory.working_set:  { enabled: true }   # bytes
+          container.memory.limit:        { enabled: true }   # bytes
+          container.network.io:          { enabled: true }   # cumulative bytes (rx/tx)
     processors:
       batch:
         timeout: 10s
         send_batch_size: 8192
         send_batch_max_size: 10000
-      cumulativetodelta:
+      cumulativetodelta: {}
+      k8sattributes:
+        auth_type: serviceAccount
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.namespace.name
+            - k8s.container.name
+            - k8s.node.name
+          labels:
+            - key: app
+            - key: qualifier    # qtest
       resource/metrics:
         attributes:
           - key: qualifier
             value: ${env:QUALIFIER}
-            action: upsert
+            action: insert
       resource/remove_default_attributes:
         attributes:
           - key: telemetry.sdk.name
@@ -55,6 +79,42 @@ otelConfiguration:
             action: delete
           - key: service.name
             action: delete
+      transform/podmetrics:
+        error_mode: ignore
+        metric_statements:
+          - context: datapoint
+            statements:
+              - extract_sum core_seconds = delta(metric["container.cpu.time"])
+              - set metric.name = "pod.cpu.cores"
+              - set metric.unit = "1"
+              - set datapoint_value_double = core_seconds / 60.0
+          - context: datapoint
+            statements:
+              - set limit_cores = to_double(attributes["k8s.container.cpu.limit_cores"] ?? attributes["container.cpu.limit"] ?? 1.0)
+              - set metric.name = "pod.cpu.utilization"
+              - set metric.unit = "percent"
+              - set datapoint_value_double = 100.0 * (metric["pod.cpu.cores"].datapoints[0].double_value / limit_cores)
+          - context: datapoint
+            statements:
+              - set metric.name = "pod.memory.working_set_mib"
+              - set metric.unit = "MiBy"
+              - set datapoint_value_double = metric["container.memory.working_set"].datapoints[0].double_value / 1048576.0
+          - context: datapoint
+            statements:
+              - set lim = to_double(metric["container.memory.limit"].datapoints[0].double_value ?? 0.0)
+              - set metric.name = "pod.memory.utilization"
+              - set metric.unit = "percent"
+              - set datapoint_value_double = iif(lim > 0.0,
+                  100.0 * (metric["container.memory.usage"].datapoints[0].double_value / lim),
+                  NaN)
+          - context: datapoint
+            statements:
+              - extract_sum bytes = delta(metric["container.network.io"])
+              - set dir = attributes["direction"] ?? "total"
+              - set metric.name = iif(dir == "rx", "pod.net.rx_bytes_per_s",
+                                   iif(dir == "tx", "pod.net.tx_bytes_per_s", "pod.net.bytes_per_s"))
+              - set metric.unit = "By/s"
+              - set datapoint_value_double = bytes / 60.0
     extensions:
       health_check:
         endpoint: :13133
@@ -74,7 +134,20 @@ otelConfiguration:
       pipelines:
         metrics:
           receivers: [otlp]
-          processors: [batch, resource/remove_default_attributes, resource/metrics, cumulativetodelta]
+          processors:
+            - resource/remove_default_attributes
+            - resource/metrics
+            - cumulativetodelta
+            - batch
+          exporters: [awsemf, prometheus]
+        metrics/pods:
+          receivers: [kubeletstats]
+          processors:
+            - resource/remove_default_attributes
+            - k8sattributes
+            - resource/metrics
+            - transform/podmetrics
+            - batch
           exporters: [awsemf, prometheus]
 
 charts:

@@ -337,7 +337,7 @@ fi
 set -x
 echo "Testing ......."
 echo "Installing Migration Assistant chart now, this can take a couple minutes..."
-helm install "$namespace" "${ma_chart_dir}" \
+helm upgrade --install "$namespace" "${ma_chart_dir}" \
   --namespace $namespace \
   -f "${ma_chart_dir}/values.yaml" \
   -f "${ma_chart_dir}/valuesEks.yaml" \
