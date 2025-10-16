@@ -20,7 +20,7 @@ spec:
       serviceAccountName: {{ .Values.otelConfiguration.serviceAccountName }}
       containers:
         - name: otel-collector
-          image: public.ecr.aws/aws-observability/aws-otel-collector:v0.43.2
+          image: {{ .Values.otelConfiguration.image.repository | default "otel/opentelemetry-collector-contrib" }}:{{ .Values.otelConfiguration.image.tag | default "0.104.0" }}
           env:
             - name: OTEL_CONFIG_LOG
               value: "true"

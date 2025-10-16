@@ -28,6 +28,9 @@ defaultBucketConfiguration:
 
 # For OTEL Daemonset
 otelConfiguration:
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: 0.104.0
   collectorConfig: |
     receivers:
       otlp:
