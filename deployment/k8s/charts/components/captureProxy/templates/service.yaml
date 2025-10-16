@@ -6,6 +6,7 @@ spec:
   selector:
     app: {{ include "generic.fullname" . }}
     env: v1
+    qualifier: qtest
   ports:
     - protocol: TCP
       port: 9200

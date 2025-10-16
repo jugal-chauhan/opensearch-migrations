@@ -15,6 +15,7 @@ spec:
       labels:
         app: {{ include "generic.fullname" . }}
         env: v1
+        qualifier: qtest
     spec:
       serviceAccountName: configmap-watcher
       initContainers:

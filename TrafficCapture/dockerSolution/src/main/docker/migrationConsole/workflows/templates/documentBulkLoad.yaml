@@ -249,6 +249,7 @@ spec:
             name: "{{inputs.parameters.session-name}}-reindex-from-snapshot"
             labels:
               workflows.argoproj.io/workflow: "{{workflow.name}}"
+              qualifier: qtest
           spec:
             replicas: {{inputs.parameters.replicas}}
             selector:
@@ -259,6 +260,7 @@ spec:
                 labels:
                   app: bulk-loader
                   workflows.argoproj.io/workflow: "{{workflow.name}}"
+                  qualifier: qtest
               spec:
                 containers:
                 - name: bulk-loader

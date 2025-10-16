@@ -5,6 +5,7 @@ metadata:
 spec:
   selector:
     app: {{ include "generic.fullname" . }}
+    qualifier: qtest
   ports:
     - name: http
       protocol: TCP

@@ -17,6 +17,7 @@ spec:
       labels:
         app: {{ include "generic.fullname" . }}
         env: v1
+        qualifier: qtest
     spec:
       serviceAccountName: migration-console-access-role
       initContainers:

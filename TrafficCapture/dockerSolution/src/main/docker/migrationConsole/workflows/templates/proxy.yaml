@@ -50,6 +50,7 @@ spec:
             name: {{inputs.parameters.service-name}}
             labels:
               app: proxy
+              qualifier: qtest
           spec:
             selector:
               app: proxy  # Selector should match pod labels directly, not use matchLabels
@@ -115,6 +116,7 @@ spec:
             generateName: proxy-
             labels:
               app: proxy
+              qualifier: qtest
           spec:
             replicas: {{inputs.parameters.replicas}}
             selector:
@@ -124,6 +126,7 @@ spec:
               metadata:
                 labels:
                   app: proxy
+                  qualifier: qtest
               spec:
                 containers:
                 - name: proxy

@@ -14,6 +14,7 @@ spec:
     metadata:
       labels:
         app: create-argo-migration-workflows
+        qualifier: qtest
     spec:
       serviceAccountName: {{ .Values.installer.serviceAccount.name }}
       restartPolicy: OnFailure
@@ -64,6 +65,7 @@ spec:
     metadata:
       labels:
         app: create-argo-migration-workflows
+        qualifier: qtest
     spec:
       serviceAccountName: {{ .Values.installer.serviceAccount.name }}
       restartPolicy: OnFailure

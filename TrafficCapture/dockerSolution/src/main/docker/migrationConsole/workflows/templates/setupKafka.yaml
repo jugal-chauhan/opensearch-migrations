@@ -108,6 +108,7 @@ spec:
             name: dual-role
             labels:
               strimzi.io/cluster: {{inputs.parameters.kafka-name}}
+              qualifier: qtest
           spec:
             replicas: 1
             roles:
@@ -210,6 +211,7 @@ spec:
             name: {{inputs.parameters.topic-name}}
             labels:
               strimzi.io/cluster: {{inputs.parameters.kafka-name}}
+              qualifier: qtest
           spec:
             partitions: {{=let v=inputs.parameters['topic-partitions']; (v==nil || v=='') ? inputs.parameters['default-topic-partitions'] : v}}
             replicas:   {{=let v=inputs.parameters['topic-replicas'];   (v==nil || v=='') ? inputs.parameters['default-topic-replicas']   : v}}

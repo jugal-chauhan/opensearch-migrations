@@ -63,6 +63,7 @@ spec:
                 app: ${CLUSTER_NAME}
                 migration-test: "true"
                 cluster-name: ${CLUSTER_NAME}
+                qualifier: qtest
             spec:
               replicas: 1
               selector:
@@ -74,6 +75,7 @@ spec:
                     app: ${CLUSTER_NAME}
                     migration-test: "true"
                     cluster-name: ${CLUSTER_NAME}
+                    qualifier: qtest
                 spec:
                   securityContext:
                     runAsUser: 1000
@@ -186,6 +188,7 @@ spec:
                 app: ${CLUSTER_NAME}
                 migration-test: "true"
                 cluster-name: ${CLUSTER_NAME}
+                qualifier: qtest
             spec:
               selector:
                 app: ${CLUSTER_NAME}
@@ -279,6 +282,7 @@ spec:
                 app: ${CLUSTER_NAME}
                 migration-test: "true"
                 cluster-name: ${CLUSTER_NAME}
+                qualifier: qtest
             spec:
               replicas: 1
               selector:
@@ -290,6 +294,7 @@ spec:
                     app: ${CLUSTER_NAME}
                     migration-test: "true"
                     cluster-name: ${CLUSTER_NAME}
+                    qualifier: qtest
                 spec:
                   securityContext:
                     runAsUser: 1000
@@ -378,6 +383,7 @@ spec:
                 app: ${CLUSTER_NAME}
                 migration-test: "true"
                 cluster-name: ${CLUSTER_NAME}
+                qualifier: qtest
             spec:
               selector:
                 app: ${CLUSTER_NAME}

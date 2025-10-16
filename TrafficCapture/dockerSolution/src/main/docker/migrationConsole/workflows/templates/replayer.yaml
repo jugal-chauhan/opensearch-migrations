@@ -80,6 +80,7 @@ spec:
             generateName: replayer-
             labels:
               app: replayer
+              qualifier: qtest
           spec:
             replicas: {{inputs.parameters.replicas}}
             selector:
@@ -89,6 +90,7 @@ spec:
               metadata:
                 labels:
                   app: replayer
+                  qualifier: qtest
               spec:
                 containers:
                 - name: replayer

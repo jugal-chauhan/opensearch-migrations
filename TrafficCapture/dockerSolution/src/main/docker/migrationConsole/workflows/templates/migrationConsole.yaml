@@ -107,6 +107,7 @@ spec:
               metadata:
                 labels:
                   app: user-environment
+                  qualifier: qtest
               spec:
                 containers:
                   - name: main

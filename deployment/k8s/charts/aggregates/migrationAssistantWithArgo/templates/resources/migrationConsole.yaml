@@ -52,11 +52,13 @@ spec:
   selector:
     matchLabels:
       app: migration-console
+      qualifier: qtest
   template:
     metadata:
       labels:
         app: migration-console
         env: v1
+        qualifier: qtest
     spec:
       serviceAccountName: migration-console-access-role
       containers:
