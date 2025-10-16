@@ -10,10 +10,12 @@ spec:
   selector:
     matchLabels:
       app: otel-collector
+      qualifier: qtest
   template:
     metadata:
       labels:
         app: otel-collector
+        qualifier: qtest
     spec:
       serviceAccountName: {{ .Values.otelConfiguration.serviceAccountName }}
       containers:
