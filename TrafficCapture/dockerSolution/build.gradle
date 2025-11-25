@@ -1,11 +1,108 @@
+import org.opensearch.migrations.common.CommonUtils
+import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
+import com.github.gradle.node.npm.task.NpmTask
+
 plugins {
     id 'org.opensearch.migrations.java-library-conventions'
     id "com.avast.gradle.docker-compose"
     id 'com.bmuschko.docker-remote-api'
+    id 'com.github.node-gradle.node' version '7.1.0'
 }
 
-import org.opensearch.migrations.common.CommonUtils
-import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
+node {
+    version = '22.14.0'
+    download = true
+}
+
+// Define paths at the top level
+def orchestrationSpecsDirP = rootProject.layout.projectDirectory.dir("orchestrationSpecs")
+def orchestrationP     = orchestrationSpecsDirP
+def configProcessorP   = orchestrationP.dir("packages/config-processor")
+def workflowTemplatesP = orchestrationP.dir("packages/migration-workflow-templates")
+def configProcessorStagingP =
+        layout.buildDirectory.dir(CommonUtils.getDockerBuildDirName("migration_console", "migrationConsole")+"/nodeStaging/configProcessor")
+def workflowTemplatesStagingP =
+        layout.buildDirectory.dir(CommonUtils.getDockerBuildDirName("migration_console", "migrationConsole")+"/nodeStaging/workflowTemplates")
+
+tasks.register('installDependencies', NpmTask) {
+    description = 'Install npm dependencies for orchestrationSpecs'
+    workingDir = orchestrationSpecsDirP.asFile
+    args = ['ci', '--force', '--omit=optional']
+
+    inputs.file(orchestrationSpecsDirP.file("package.json"))
+    inputs.file(orchestrationSpecsDirP.file("package-lock.json"))
+    outputs.dir(orchestrationSpecsDirP.dir("node_modules"))
+}
+
+tasks.register('testWorkflowTemplates', NpmTask) {
+    description = 'Run Jest tests for workflow-templates'
+    workingDir = workflowTemplatesP.asFile
+    args = ['run', 'test-all']
+    dependsOn installDependencies
+
+    inputs.dir(workflowTemplatesP.dir("src"))
+    inputs.file(workflowTemplatesP.file("jest.config.js")).optional()
+    outputs.dir(workflowTemplatesP.dir("coverage")).optional()
+}
+
+tasks.register('makeAndStageWorkflowTemplates', NpmTask) {
+    description = 'Build the workflow templates from their TypeScript definitions'
+    workingDir = workflowTemplatesP.asFile
+    args = ['run', 'check-and-make-templates', '--', '--outputDirectory', workflowTemplatesStagingP.get().asFile.absolutePath]
+    dependsOn installDependencies
+    dependsOn testWorkflowTemplates
+
+    inputs.dir(workflowTemplatesP.dir("src"))
+    outputs.dir(workflowTemplatesStagingP)
+
+    doFirst {
+        workflowTemplatesStagingP.get().asFile.mkdirs()
+    }
+}
+
+tasks.register('typeCheckConfigProcessor', NpmTask) {
+    description = 'Run TypeScript type checking for config-processor'
+    workingDir = configProcessorP.asFile
+    args = ['run', 'type-check']
+    dependsOn installDependencies
+
+    inputs.dir(configProcessorP.dir("src"))
+    inputs.dir(configProcessorP.dir("scripts/createMigrationWorkflowFromUserConfiguration.sh"))
+    inputs.file(configProcessorP.file("tsconfig.json"))
+    outputs.upToDateWhen { false }
+}
+
+tasks.register('testConfigProcessor', NpmTask) {
+    description = 'Run Jest tests for config-processor'
+    workingDir = configProcessorP.asFile
+    args = ['run', 'test']
+    dependsOn installDependencies
+
+    inputs.dir(configProcessorP.dir("src"))
+    inputs.file(configProcessorP.file("jest.config.js")).optional()
+    outputs.dir(configProcessorP.dir("coverage")).optional()
+}
+
+tasks.register('buildAndStageConfigProcessor', NpmTask) {
+    description = 'Build and stage the config-processor TypeScript package directly to staging'
+    workingDir = configProcessorP.asFile
+    args = ['run', 'bundle', '--', configProcessorStagingP.get().asFile.absolutePath]
+    dependsOn installDependencies
+    dependsOn testConfigProcessor
+
+    inputs.dir(configProcessorP.dir("src"))
+    inputs.file(configProcessorP.file("makeBundle.js"))
+    outputs.dir(configProcessorStagingP)
+
+    doFirst {
+        configProcessorStagingP.get().asFile.mkdirs()
+    }
+}
+
+ext.directorySize = { File dir ->
+    if (!dir.exists()) return 0L
+    return dir.directorySize()
+}
 
 def dockerFilesForExternalServices = [
         "elasticsearch_searchguard": "elasticsearchWithSearchGuard",
@@ -16,20 +113,25 @@ def dockerFilesForExternalServices = [
         "otel_collector": "otelCollector",
         "grafana": "grafana"
 ]
+
 dockerFilesForExternalServices.each { dockerImageName, projectName ->
     task("buildDockerImage_${dockerImageName}", type: DockerBuildImage) {
         if (projectName == "migrationConsole") {
+            dependsOn makeAndStageWorkflowTemplates
+            dependsOn buildAndStageConfigProcessor
+
             def libraries = [
-                project(":libraries:kafkaCommandLineFormatter")
+                    project(":libraries:kafkaCommandLineFormatter")
             ]
 
             def applications = [
-                project(":CreateSnapshot"),
-                project(":MetadataMigration")
+                    project(":CreateSnapshot"),
+                    project(":MetadataMigration")
             ]
             // Setup additional sync task which doesn't depend on the base image being built, for other projects to use
             getMigrationConsoleSyncTask(project, dockerImageName, projectName, libraries, applications, false)
             def syncTask = getMigrationConsoleSyncTask(project, dockerImageName, projectName, libraries, applications, true)
+
             dependsOn syncTask
             inputDir = syncTask.destinationDir
         } else {
@@ -42,7 +144,7 @@ dockerFilesForExternalServices.each { dockerImageName, projectName ->
 }
 
 static Sync getMigrationConsoleSyncTask(Project project, String dockerImageName, String projectName, List<Project> libraries, List<Project> applications, boolean dependOnBaseImage) {
-     // Create a single sync task to copy the required files
+    // Create a single sync task to copy the required files
     def destDir = "build/docker/${dockerImageName}_${projectName}"
     def taskName = "syncArtifact_${dockerImageName}_${projectName}"
     if (!dependOnBaseImage) {
@@ -51,6 +153,10 @@ static Sync getMigrationConsoleSyncTask(Project project, String dockerImageName,
     def syncTask = project.tasks.create(taskName, Sync) {
         into destDir
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+        preserve {
+            include 'nodeStaging/**'
+        }
 
         // Applications and Standalone Libraries both have libraries, sync them
         (libraries + applications).each { lib ->

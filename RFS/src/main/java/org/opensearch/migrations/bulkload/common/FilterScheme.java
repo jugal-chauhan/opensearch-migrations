@@ -19,11 +19,15 @@ public class FilterScheme {
             "elastic_agent.",
             "ilm-history-",
             "logs-elastic_agent",
+            "logs-endpoint.",
             "logs-index_pattern",
+            "logs-system.",
             "metricbeat-",
             "metrics-elastic_agent",
             "metrics-endpoint.",
             "metrics-index_pattern",
+            "metrics-metadata-",
+            "metrics-system.",
             "profiling-",
             "synthetics-"
     );
@@ -53,6 +57,7 @@ public class FilterScheme {
             "profiling",
             "search-acl-filter",
             "synthetics",
+            "tenant_template",
             "traces",
             "traces-mappings",
             "traces-settings",
@@ -63,11 +68,22 @@ public class FilterScheme {
     );
 
     public static Predicate<String> filterByAllowList(List<String> allowlist) {
+        // Validate and pre-compile all allowlist entries to fail fast on invalid patterns
+        final List<AllowlistEntry> compiledEntries;
+        if (allowlist != null && !allowlist.isEmpty()) {
+            compiledEntries = allowlist.stream()
+                .map(AllowlistEntry::new)
+                .toList();
+        } else {
+            compiledEntries = null;
+        }
+        
         return item -> {
-            if (allowlist == null || allowlist.isEmpty()) {
+            if (compiledEntries == null) {
                 return !isExcluded(item);
             } else {
-                return allowlist.contains(item);
+                return compiledEntries.stream()
+                    .anyMatch(entry -> entry.matches(item));
             }
         };
     }

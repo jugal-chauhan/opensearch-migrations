@@ -1,6 +1,6 @@
 import {Construct} from 'constructs';
 import {CfnCluster, CfnPodIdentityAssociation} from 'aws-cdk-lib/aws-eks';
-import {IVpc, Port, SecurityGroup} from 'aws-cdk-lib/aws-ec2';
+import {IVpc} from 'aws-cdk-lib/aws-ec2';
 import {
     Effect,
     ManagedPolicy, Policy,
@@ -8,7 +8,7 @@ import {
     Role,
     ServicePrincipal,
 } from "aws-cdk-lib/aws-iam";
-import {RemovalPolicy, Tags} from "aws-cdk-lib";
+import {RemovalPolicy, Stack, Tags} from "aws-cdk-lib";
 import {Repository} from "aws-cdk-lib/aws-ecr";
 
 
@@ -17,28 +17,27 @@ export interface EKSInfraProps {
     clusterName: string;
     ecrRepoName: string;
     stackName: string;
+    vpcSubnetIds?: string[];
     namespace?: string;
     buildImagesServiceAccountName?: string;
+    argoWorkflowServiceAccountName?: string;
     migrationsServiceAccountName?: string;
+    migrationConsoleServiceAccountName?: string;
 }
 
 export class EKSInfra extends Construct {
     public readonly cluster: CfnCluster;
     public readonly ecrRepo: Repository;
+    public readonly snapshotRole: Role;
 
     constructor(scope: Construct, id: string, props: EKSInfraProps) {
         super(scope, id);
 
         const namespace = props.namespace ?? 'ma';
         const buildImagesServiceAccountName = props.buildImagesServiceAccountName ?? 'build-images-service-account';
+        const argoWorkflowServiceAccountName = props.argoWorkflowServiceAccountName ?? 'argo-workflow-executor';
         const migrationsServiceAccountName = props.migrationsServiceAccountName ?? 'migrations-service-account';
-
-        const migrationSecurityGroup = new SecurityGroup(this, 'MigrationsSecurityGroup', {
-            vpc: props.vpc,
-            allowAllOutbound: true,
-            allowAllIpv6Outbound: true,
-        })
-        migrationSecurityGroup.addIngressRule(migrationSecurityGroup, Port.allTraffic());
+        const migrationConsoleServiceAccountName = props.migrationConsoleServiceAccountName ?? 'migration-console-access-role';
 
         this.ecrRepo = new Repository(this, 'MigrationsECRRepository', {
             repositoryName: props.ecrRepoName,
@@ -73,11 +72,16 @@ export class EKSInfra extends Construct {
             ],
         });
 
-        const subnetIds = []
-        for (const subnet of props.vpc.privateSubnets) {
-            Tags.of(subnet).add(`kubernetes.io/cluster/${props.clusterName}`, 'shared');
-            Tags.of(subnet).add('kubernetes.io/role/internal-elb', '1');
-            subnetIds.push(subnet.subnetId)
+        let subnetIds
+        if (props.vpcSubnetIds && props.vpcSubnetIds.length > 0) {
+            subnetIds = props.vpcSubnetIds
+        } else {
+            subnetIds = []
+            for (const subnet of props.vpc.privateSubnets) {
+                Tags.of(subnet).add(`kubernetes.io/cluster/${props.clusterName}`, 'shared');
+                Tags.of(subnet).add('kubernetes.io/role/internal-elb', '1');
+                subnetIds.push(subnet.subnetId)
+            }
         }
         this.cluster = new CfnCluster(this, 'MigrationsEKSCluster', {
             name: props.clusterName,
@@ -90,7 +94,6 @@ export class EKSInfra extends Construct {
                 subnetIds: subnetIds,
                 endpointPrivateAccess: true,
                 endpointPublicAccess: true,
-                securityGroupIds: [migrationSecurityGroup.securityGroupId]
             },
             accessConfig: {
                 authenticationMode: 'API',
@@ -111,13 +114,58 @@ export class EKSInfra extends Construct {
                 }
             }
         });
-        migrationSecurityGroup.addIngressRule(
-            SecurityGroup.fromSecurityGroupId(this, "MigrationsEKSClusterDefaultSG", this.cluster.attrClusterSecurityGroupId),
-            Port.allTraffic()
-        );
 
+        const podIdentityRole = this.createDefaultPodIdentityRole(props.clusterName)
+        this.snapshotRole = new Role(scope, `SnapshotRole`, {
+            assumedBy: new ServicePrincipal('es.amazonaws.com'),  // Note that snapshots are not currently possible on AOSS
+            description: 'Role that grants OpenSearch Service permissions to access S3 to create snapshots',
+            roleName: `${props.clusterName}-snapshot-role`
+        });
+        this.snapshotRole.addToPolicy(new PolicyStatement({
+            effect: Effect.ALLOW,
+            actions: ['s3:ListBucket'],
+            resources: ['arn:aws:s3:::migrations-*'],
+        }));
+        this.snapshotRole.addToPolicy(new PolicyStatement({
+            effect: Effect.ALLOW,
+            actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+            resources: ['arn:aws:s3:::migrations-*/*'],
+        }));
+        this.snapshotRole.grantPassRole(podIdentityRole);
+
+        const buildImagesPodIdentityAssociation = new CfnPodIdentityAssociation(this, 'BuildImagesPodIdentityAssociation', {
+            clusterName: props.clusterName,
+            namespace: namespace,
+            serviceAccount: buildImagesServiceAccountName,
+            roleArn: podIdentityRole.roleArn,
+        });
+        const argoWorkflowIdentityAssociation = new CfnPodIdentityAssociation(this, 'ArgoWorkflowPodIdentityAssociation', {
+            clusterName: props.clusterName,
+            namespace: namespace,
+            serviceAccount: argoWorkflowServiceAccountName,
+            roleArn: podIdentityRole.roleArn,
+        });
+        const migrationsPodIdentityAssociation = new CfnPodIdentityAssociation(this, 'MigrationsPodIdentityAssociation', {
+            clusterName: props.clusterName,
+            namespace: namespace,
+            serviceAccount: migrationsServiceAccountName,
+            roleArn: podIdentityRole.roleArn,
+        });
+        const migrationConsolePodIdentityAssociation = new CfnPodIdentityAssociation(this, 'MigrationConsolePodIdentityAssociation', {
+            clusterName: props.clusterName,
+            namespace: namespace,
+            serviceAccount: migrationConsoleServiceAccountName,
+            roleArn: podIdentityRole.roleArn,
+        });
+        buildImagesPodIdentityAssociation.node.addDependency(this.cluster)
+        argoWorkflowIdentityAssociation.node.addDependency(this.cluster)
+        migrationsPodIdentityAssociation.node.addDependency(this.cluster)
+        migrationConsolePodIdentityAssociation.node.addDependency(this.cluster)
+    }
+
+    createDefaultPodIdentityRole(clusterName: string) {
         const podIdentityRole = new Role(this, 'MigrationsPodIdentityRole', {
-            roleName: `${props.clusterName}-migrations-role`,
+            roleName: `${clusterName}-migrations-role`,
             description: 'Migrations IAM role assumed by pods via EKS Pod Identity',
             assumedBy: new ServicePrincipal('pods.eks.amazonaws.com'),
             managedPolicies: [
@@ -202,20 +250,22 @@ export class EKSInfra extends Construct {
                 ],
                 resources: ['*'],
             }),
+            // Sending traces to xray
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: [
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords"
+                ],
+                resources: ['*'],
+            }),
+            // Allow passing default or user-provided snapshot role to OpenSearch service
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: ['iam:PassRole'],
+                resources: [`arn:aws:iam::${Stack.of(this).account}:role/*`]
+            })
         );
-        const buildImagesPodIdentityAssociation = new CfnPodIdentityAssociation(this, 'BuildImagesPodIdentityAssociation', {
-            clusterName: props.clusterName,
-            namespace: namespace,
-            serviceAccount: buildImagesServiceAccountName,
-            roleArn: podIdentityRole.roleArn,
-        });
-        const migrationsPodIdentityAssociation = new CfnPodIdentityAssociation(this, 'MigrationsPodIdentityAssociation', {
-            clusterName: props.clusterName,
-            namespace: namespace,
-            serviceAccount: migrationsServiceAccountName,
-            roleArn: podIdentityRole.roleArn,
-        });
-        buildImagesPodIdentityAssociation.node.addDependency(this.cluster)
-        migrationsPodIdentityAssociation.node.addDependency(this.cluster)
+        return podIdentityRole
     }
 }

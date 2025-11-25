@@ -345,7 +345,7 @@ def test_run_benchmark_executes_correctly_no_auth(mocker):
     mock = mocker.patch("subprocess.run", autospec=True)
     workload = "nyctaxis"
     cluster.execute_benchmark_workload(workload=workload)
-    mock.assert_called_once_with("opensearch-benchmark execute-test"
+    mock.assert_called_once_with("opensearch-benchmark run"
                                  " --exclude-tasks=check-cluster-health"
                                  f" --target-host={cluster.endpoint} --workload={workload}"
                                  " --pipeline=benchmark-only"
@@ -369,7 +369,7 @@ def test_run_benchmark_executes_correctly_basic_auth_and_https(mocker):
     mock = mocker.patch("subprocess.run", autospec=True)
     workload = "nyctaxis"
     cluster.execute_benchmark_workload(workload=workload)
-    mock.assert_called_once_with("opensearch-benchmark execute-test"
+    mock.assert_called_once_with("opensearch-benchmark run"
                                  " --exclude-tasks=check-cluster-health"
                                  f" --target-host={cluster.endpoint} --workload={workload}"
                                  " --pipeline=benchmark-only"
@@ -404,8 +404,11 @@ def test_sigv4_authentication_signature(requests_mock, method, endpoint, data, h
         requests_mock.post(url, json={'hits': {'total': 0, 'hits': []}})
     # Mock datetime to return a specific timestamp
     specific_time = datetime.datetime(2025, 1, 1, 12, 0, 0)
-    with mock_aws() and patch("datetime.datetime") as mock_datetime:
-        mock_datetime.utcnow.return_value = specific_time
+    # Patch botocore's datetime usage instead of the datetime module itself
+    with mock_aws(), patch('botocore.auth.datetime') as mock_datetime:
+        mock_datetime.datetime.utcnow.return_value = specific_time
+        mock_datetime.datetime.now.return_value = specific_time
+        mock_datetime.datetime.strftime = datetime.datetime.strftime
 
         # Add default headers to the request
         headers = {

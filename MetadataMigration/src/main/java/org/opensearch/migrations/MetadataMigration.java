@@ -8,6 +8,8 @@ import org.opensearch.migrations.arguments.ArgLogUtils;
 import org.opensearch.migrations.arguments.ArgNameConstants;
 import org.opensearch.migrations.cli.OutputFormat;
 import org.opensearch.migrations.commands.*;
+import org.opensearch.migrations.jcommander.EnvVarParameterPuller;
+import org.opensearch.migrations.jcommander.JsonCommandLineParser;
 import org.opensearch.migrations.metadata.tracing.RootMetadataMigrationContext;
 import org.opensearch.migrations.tracing.ActiveContextTracker;
 import org.opensearch.migrations.tracing.ActiveContextTrackerByActivityType;
@@ -25,6 +27,8 @@ import org.apache.logging.log4j.core.appender.FileAppender;
 @Slf4j
 public class MetadataMigration {
 
+    public static final String ENV_PREFIX = "METADATA_MIGRATE_";
+
     public static void main(String[] args) {
         new MetadataMigration().run(args);
     }
@@ -36,35 +40,33 @@ public class MetadataMigration {
                 args,
                 ArgNameConstants.joinLists(ArgNameConstants.CENSORED_SOURCE_ARGS, ArgNameConstants.CENSORED_TARGET_ARGS)
         )));
-        var metadataArgs = new MetadataArgs();
-        var migrateArgs = new MigrateArgs();
-        var evaluateArgs = new EvaluateArgs();
-        var jCommander = JCommander.newBuilder()
+        var metadataArgs = EnvVarParameterPuller.injectFromEnv(new MetadataArgs(), ENV_PREFIX);
+        var migrateArgs  = EnvVarParameterPuller.injectFromEnv(new MigrateArgs(),  ENV_PREFIX);
+        var evaluateArgs = EnvVarParameterPuller.injectFromEnv(new EvaluateArgs(), ENV_PREFIX);
+        var argsParser = JsonCommandLineParser.newBuilder()
             .addObject(metadataArgs)
             .addCommand(migrateArgs)
             .addCommand(evaluateArgs)
             .build();
-        jCommander.parse(args);
-        EnvArgs.injectFromEnv(migrateArgs);
-        EnvArgs.injectFromEnv(evaluateArgs);
-        
+        argsParser.parse(args);
+
         if (migrateArgs.outputFormat == OutputFormat.JSON || evaluateArgs.outputFormat == OutputFormat.JSON) {
             outputFormat.set(OutputFormat.JSON);
         } else {
             outputFormat.set(OutputFormat.HUMAN_READABLE);
         }
 
-        if (metadataArgs.help || jCommander.getParsedCommand() == null) {
-            printTopLevelHelp(jCommander);
+        if (metadataArgs.help || argsParser.getParsedCommand() == null) {
+            printTopLevelHelp(argsParser.getJCommander());
             return;
         }
 
         if (migrateArgs.help || evaluateArgs.help) {
-            printCommandUsage(jCommander);
+            printCommandUsage(argsParser.getJCommander());
             return;
         }
 
-        var result = runCommand(jCommander, metadataArgs, migrateArgs, evaluateArgs);
+        var result = runCommand(argsParser.getJCommander(), metadataArgs, migrateArgs, evaluateArgs);
 
         // Output format determines which version is printed to the user
         writeOutput(result.asCliOutput());

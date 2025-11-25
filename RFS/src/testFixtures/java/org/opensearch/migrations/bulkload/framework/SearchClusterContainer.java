@@ -42,8 +42,8 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         "discovery.zen.minimum_master_nodes: 1",
         "node.max_local_storage_nodes: 2",
         "path.repo: \"/tmp/snapshots\"",
-        "cluster.routing.allocation.disk.watermark.low: 99%",
-        "cluster.routing.allocation.disk.watermark.high: 99%"
+        "cluster.routing.allocation.disk.watermark.low: 100%",
+        "cluster.routing.allocation.disk.watermark.high: 100%"
     );
 
     // This version of doesn't support path.repo based via env variables, passing this value via config
@@ -52,8 +52,8 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
     private static final String OLDER_ES_CONFIG =
         "network.host: 0.0.0.0\n" +
         "path.repo: \"" + CLUSTER_SNAPSHOT_DIR + "\"\n" +
-        "cluster.routing.allocation.disk.watermark.low: 99%\n" +
-        "cluster.routing.allocation.disk.watermark.high: 99%";
+        "cluster.routing.allocation.disk.watermark.low: 100%\n" +
+        "cluster.routing.allocation.disk.watermark.high: 100%";
 
     private static String buildEs5ConfigYml(List<String> baseLines, String... extraLines) {
         List<String> allLines = new ArrayList<>(baseLines);
@@ -80,6 +80,7 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
         return Collections.unmodifiableMap(merged);
     }
 
+    public static final ContainerVersion ES_V8_19 = Elasticsearch8Version.fromTag("8.19.4");
     public static final ContainerVersion ES_V8_18 = Elasticsearch8Version.fromTag("8.18.4");
     public static final ContainerVersion ES_V8_17 = Elasticsearch8Version.fromTag("8.17.5");
     public static final ContainerVersion ES_V8_16 = Elasticsearch8Version.fromTag("8.16.6");
@@ -98,7 +99,7 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
     public static final ContainerVersion ES_V8_3 = Elasticsearch8Version.fromTag("8.3.3");
     public static final ContainerVersion ES_V8_2 = Elasticsearch8Version.fromTag("8.2.3");
     public static final ContainerVersion ES_V8_1 = Elasticsearch8Version.fromTag("8.1.3");
-    public static final ContainerVersion ES_V8_0 = Elasticsearch8Version.fromTag("8.0.0");
+    public static final ContainerVersion ES_V8_0 = Elasticsearch8Version.fromTag("8.0.1");
 
     public static final ContainerVersion ES_V7_17 = Elasticsearch7Version.fromTag("7.17.22");
     public static final ContainerVersion ES_V7_16 = Elasticsearch7Version.fromTag("7.16.3");
@@ -158,9 +159,9 @@ public class SearchClusterContainer extends GenericContainer<SearchClusterContai
             "index.store.type", "mmapfs",
             "bootstrap.system_call_filter", "false",
             "ES_JAVA_OPTS", "-Xms2g -Xmx2g",
-            "cluster.routing.allocation.disk.watermark.low", "99%",
-            "cluster.routing.allocation.disk.watermark.high", "99%",
-            "cluster.routing.allocation.disk.watermark.flood_stage", "99%"
+            "cluster.routing.allocation.disk.watermark.low", "100%",
+            "cluster.routing.allocation.disk.watermark.high", "100%",
+            "cluster.routing.allocation.disk.watermark.flood_stage", "100%"
         )),
         ELASTICSEARCH(
             overrideAndRemoveEnv(

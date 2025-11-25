@@ -1,5 +1,6 @@
 conditionalPackageInstalls:
   localstack: false
+  jaeger: false
 
 aws:
   configureAwsEksResources: true
@@ -11,6 +12,7 @@ defaultBucketConfiguration:
   deleteOnUninstall: true
   emptyBeforeDelete: true
   endpoint: ""
+  snapshotRoleArn: ""
 
 # Useful for updating images while developing
 #images:
@@ -24,6 +26,90 @@ defaultBucketConfiguration:
 #    pullPolicy: Always
 #  installer:
 #    pullPolicy: Always
+
+# For OTEL Daemonset
+otelConfiguration:
+  env:
+    - name: AWS_REGION
+      valueFrom:
+        configMapKeyRef:
+          name: aws-metadata
+          key: AWS_REGION
+  collectorConfig: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'cadvisor'
+              scrape_interval: 5s
+              scheme: https
+              authorization:
+                credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              kubernetes_sd_configs:
+                - role: node
+              relabel_configs:
+                # Only scrape the local node (important for DaemonSet)
+                - source_labels: [__meta_kubernetes_node_name]
+                  action: keep
+                  regex: ${K8S_NODE_NAME}
+                # Change path from /metrics to /metrics/cadvisor
+                - target_label: __metrics_path__
+                  replacement: /metrics/cadvisor
+                # Keep node name as a label
+                - source_labels: [__meta_kubernetes_node_name]
+                  target_label: node
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 8192
+        send_batch_max_size: 10000
+      cumulativetodelta:
+      resource/metrics:
+        attributes:
+          - key: qualifier
+            value: ${env:QUALIFIER}
+            action: upsert
+      resource/remove_default_attributes:
+        attributes:
+          - key: telemetry.sdk.name
+            action: delete
+          - key: telemetry.sdk.version
+            action: delete
+          - key: telemetry.sdk.language
+            action: delete
+          - key: service.name
+            action: delete
+    extensions:
+      health_check:
+        endpoint: :13133
+    exporters:
+      debug:
+        verbosity: detailed
+        sampling_initial: 5
+        sampling_thereafter: 200
+      awsemf:
+        namespace: 'OpenSearchMigrations'
+        dimension_rollup_option: NoDimensionRollup # Reduce number of metrics by only publishing with all dimensions
+        resource_to_telemetry_conversion:
+          enabled: true
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        send_timestamps: true
+        metric_expiration: 5m
+        enable_open_metrics: true
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [otlp, prometheus]
+          processors: [batch, resource/remove_default_attributes, resource/metrics, cumulativetodelta]
+          exporters: [awsemf, prometheus]
 
 charts:
   fluent-bit:

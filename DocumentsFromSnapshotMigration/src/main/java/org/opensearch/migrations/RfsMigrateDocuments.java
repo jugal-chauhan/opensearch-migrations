@@ -7,8 +7,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -20,6 +22,7 @@ import org.opensearch.migrations.arguments.ArgLogUtils;
 import org.opensearch.migrations.arguments.ArgNameConstants;
 import org.opensearch.migrations.bulkload.common.DefaultSourceRepoAccessor;
 import org.opensearch.migrations.bulkload.common.DeltaMode;
+import org.opensearch.migrations.bulkload.common.DocumentExceptionAllowlist;
 import org.opensearch.migrations.bulkload.common.DocumentReindexer;
 import org.opensearch.migrations.bulkload.common.FileSystemRepo;
 import org.opensearch.migrations.bulkload.common.OpenSearchClient;
@@ -46,6 +49,8 @@ import org.opensearch.migrations.bulkload.worker.RegularDocumentReaderEngine;
 import org.opensearch.migrations.bulkload.worker.ShardWorkPreparer;
 import org.opensearch.migrations.bulkload.worker.WorkItemCursor;
 import org.opensearch.migrations.cluster.ClusterProviderRegistry;
+import org.opensearch.migrations.jcommander.EnvVarParameterPuller;
+import org.opensearch.migrations.jcommander.JsonCommandLineParser;
 import org.opensearch.migrations.reindexer.tracing.RootDocumentMigrationContext;
 import org.opensearch.migrations.tracing.ActiveContextTracker;
 import org.opensearch.migrations.tracing.ActiveContextTrackerByActivityType;
@@ -55,11 +60,11 @@ import org.opensearch.migrations.transform.IJsonTransformer;
 import org.opensearch.migrations.transform.TransformationLoader;
 import org.opensearch.migrations.transform.TransformerConfigUtils;
 import org.opensearch.migrations.transform.TransformerParams;
+import org.opensearch.migrations.utils.FileSystemUtils;
 import org.opensearch.migrations.utils.ProcessHelpers;
 
 import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.IValueValidator;
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import com.beust.jcommander.ParametersDelegate;
@@ -161,6 +166,11 @@ public class RfsMigrateDocuments {
             description = "The absolute path to the directory where we'll put the Lucene docs")
         public String luceneDir;
 
+        @Parameter(required = false,
+            names = { "--clean-local-dirs", "--cleanLocalDirs" },
+            description = "Optional. If enabled, deletes s3LocalDir and luceneDir before running. Default: false")
+        public boolean cleanLocalDirs = false;
+
         @ParametersDelegate
         public ConnectionContext.TargetArgs targetArgs = new ConnectionContext.TargetArgs();
 
@@ -213,8 +223,8 @@ public class RfsMigrateDocuments {
         @Parameter(required = true,
             names = { "--source-version", "--sourceVersion" },
             converter = VersionConverter.class,
-            description = ("Version of the source cluster."))
-        public Version sourceVersion = Version.fromString("ES 7.10");
+            description = ("Version of the source cluster. Required parameter - no default fallback."))
+        public Version sourceVersion;
 
         @Parameter(required = false,
             names = { "--session-name", "--sessionName" },
@@ -231,6 +241,14 @@ public class RfsMigrateDocuments {
 
         @ParametersDelegate
         private ExperimentalArgs experimental = new ExperimentalArgs();
+
+        @Parameter(required = false,
+            names = { "--allowed-doc-exception-types", "--allowedDocExceptionTypes" },
+            description = "Optional. Comma-separated list of document-level exception types that should be " +
+                "treated as successful operations during bulk migration. This enables idempotent migrations by " +
+                "allowing specific errors (e.g., 'version_conflict_engine_exception') to be treated as success " +
+                "rather than failure. Example: --allowed-doc-exception-types version_conflict_engine_exception")
+        public List<String> allowedDocExceptionTypes = List.of();
     }
 
     public static class ExperimentalArgs {
@@ -298,28 +316,6 @@ public class RfsMigrateDocuments {
         private String transformerConfigFile;
     }
 
-    public static class EnvParameters {
-
-        private EnvParameters() {
-            throw new IllegalStateException("EnvParameters utility class should not instantiated");
-        }
-
-        public static void injectFromEnv(Args args) {
-            List<String> addedEnvParams = new ArrayList<>();
-            if (args.targetArgs.username == null && System.getenv(ArgNameConstants.TARGET_USERNAME_ENV_ARG) != null) {
-                args.targetArgs.username = System.getenv(ArgNameConstants.TARGET_USERNAME_ENV_ARG);
-                addedEnvParams.add(ArgNameConstants.TARGET_USERNAME_ENV_ARG);
-            }
-            if (args.targetArgs.password == null && System.getenv(ArgNameConstants.TARGET_PASSWORD_ENV_ARG) != null) {
-                args.targetArgs.password = System.getenv(ArgNameConstants.TARGET_PASSWORD_ENV_ARG);
-                addedEnvParams.add(ArgNameConstants.TARGET_PASSWORD_ENV_ARG);
-            }
-            if (!addedEnvParams.isEmpty()) {
-                log.info("Adding parameters from the following expected environment variables: {}", addedEnvParams);
-            }
-        }
-    }
-
     public static class NoWorkLeftException extends Exception {
         public NoWorkLeftException(String message) {
             super(message);
@@ -376,17 +372,20 @@ public class RfsMigrateDocuments {
         System.setProperty("log4j2.shutdownHookEnabled", "false");
         log.info("Starting RfsMigrateDocuments with workerId=" + workerId);
 
-        Args arguments = new Args();
-        JCommander jCommander = JCommander.newBuilder().addObject(arguments).build();
+        Args arguments = EnvVarParameterPuller.injectFromEnv(new Args(), "RFS_");
+        var jCommander = JsonCommandLineParser.newBuilder().addObject(arguments).build();
         jCommander.parse(args);
-        EnvParameters.injectFromEnv(arguments);
 
         if (arguments.help) {
-            jCommander.usage();
+            jCommander.getJCommander().usage();
             return;
         }
 
         validateArgs(arguments);
+
+        if (arguments.cleanLocalDirs) {
+            FileSystemUtils.deleteDirectories(arguments.s3LocalDir, arguments.luceneDir);
+        }
 
         var context = makeRootContext(arguments, workerId);
         var luceneDirPath = Paths.get(arguments.luceneDir);
@@ -450,11 +449,22 @@ public class RfsMigrateDocuments {
             }));
 
             MDC.put(LOGGING_MDC_WORKER_ID, workerId); // I don't see a need to clean this up since we're in main
+            
+            // Create document exception allowlist from command-line arguments
+            Set<String> allowedExceptionTypesSet = new HashSet<>(arguments.allowedDocExceptionTypes);
+            DocumentExceptionAllowlist allowlist = new DocumentExceptionAllowlist(allowedExceptionTypesSet);
+            if (!allowedExceptionTypesSet.isEmpty()) {
+                log.atInfo().setMessage("Document exception allowlist configured with types: {}")
+                    .addArgument(String.join(", ", allowedExceptionTypesSet))
+                    .log();
+            }
+            
             DocumentReindexer reindexer = new DocumentReindexer(targetClient,
                 arguments.numDocsPerBulkRequest,
                 arguments.numBytesPerBulkRequest,
                 arguments.maxConnections,
-                docTransformerSupplier);
+                docTransformerSupplier,
+                allowlist);
 
             var finder = ClusterProviderRegistry.getSnapshotFileFinder(
                     arguments.sourceVersion,
@@ -475,8 +485,7 @@ public class RfsMigrateDocuments {
 
             var unpackerFactory = new SnapshotShardUnpacker.Factory(
                 repoAccessor,
-                luceneDirPath,
-                sourceResourceProvider.getBufferSizeInBytes()
+                luceneDirPath
             );
 
             run(

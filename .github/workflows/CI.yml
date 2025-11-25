@@ -8,7 +8,7 @@ env:
   python-version: '3.11'
   java-version: '17'
   gradle-version: '8.12.1'
-  node-version: '18.x'
+  node-version: '22.x'
   gradle-test-parallelization: '30'
 
 # Prevent multiple simultaneous runs except on main repo
@@ -18,11 +18,11 @@ concurrency:
 
 jobs:
   generate-cache-key:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       docker_cache_key: ${{ steps.generate_docker_cache_key.outputs.key }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Generate Docker Cache Key
         id: generate_docker_cache_key
         run: |
@@ -31,29 +31,8 @@ jobs:
           key=$(echo "${file_contents}" | sha1sum | awk '{print $1}')
           echo "key=${key}" >> "$GITHUB_OUTPUT"
 
-  workflow-info:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create JSON Artifact
-        run: |
-          echo '{' > workflow-info.json
-          echo '  "pr_number": "${{ github.event.pull_request.number }}",' >> workflow-info.json
-          echo '  "commit": "${{ github.event.pull_request.head.sha || github.event.after || github.sha }}",' >> workflow-info.json
-          echo '  "branch": "${{ github.ref }}",' >> workflow-info.json
-          echo '  "commit_parent": "${{ github.event.pull_request.base.sha || github.event.before || github.base.sha }}",' >> workflow-info.json
-          echo '  "build_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",' >> workflow-info.json
-          echo '  "build": "${{ github.run_id }}"' >> workflow-info.json
-          echo '}' >> workflow-info.json
-          echo "workflow-info.json created"
-      - name: Upload JSON Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: workflow-info
-          path: workflow-info.json
-
-
   gradle-extended-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
@@ -61,7 +40,7 @@ jobs:
           - spotlessCheck
           - publishToMavenLocal
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-env
       - name: Run Gradle Build
         run: gradle ${{matrix.tasks}}
@@ -69,9 +48,9 @@ jobs:
           OS_MIGRATIONS_GRADLE_SCAN_TOS_AGREE_AND_ENABLED: ''
 
   python-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-env
       - name: Install dependencies
         run: |
@@ -82,14 +61,13 @@ jobs:
           flake8 $(git ls-files '*.py')
 
   python-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         py-project:
           - migrationConsole/lib/console_link
           - migrationConsole/cluster_tools
-          - migrationConsole/console_api
           - k8sConfigMapUtilScripts
     env:
       WORKING_DIR: ./TrafficCapture/dockerSolution/src/main/docker/${{ matrix.py-project }}
@@ -97,8 +75,24 @@ jobs:
       run:
         working-directory: ${{ env.WORKING_DIR }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-env
+
+      # Set up Kind cluster for workflow integration tests (only for console_link project)
+      - name: Set up Kind cluster
+        if: matrix.py-project == 'migrationConsole/lib/console_link'
+        uses: helm/kind-action@v1.13.0
+        with:
+          cluster_name: kind-test-cluster
+
+      # Verify Kind cluster is ready (only for console_link project)
+      - name: Verify Kind cluster
+        if: matrix.py-project == 'migrationConsole/lib/console_link'
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+          kubectl get namespaces
+
       - run: |
           python3 -m pip install --upgrade pipenv
           pipenv install --deploy --dev
@@ -111,15 +105,19 @@ jobs:
         env:
           PY_PROJECT: ${{ matrix.py-project }}
         run: echo "SANITIZED_PY_PROJECT=${PY_PROJECT//\//-}" >> $GITHUB_ENV
-      - name: Upload Coverage Reports
-        uses: actions/upload-artifact@v4
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_SKIP_VALIDATION: true
         with:
-          if-no-files-found: error
-          name: coverage-reports-python-tests-${{ env.SANITIZED_PY_PROJECT }}
-          path: ${{ env.WORKING_DIR }}/coverage.xml
+          fail_ci_if_error: true
+          flags: python
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
   generate-test-matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -134,13 +132,13 @@ jobs:
 
   gradle-tests:
     needs: [generate-test-matrix, generate-cache-key]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         index: ${{ fromJson(needs.generate-test-matrix.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-env
       - name: Restore Docker Cache
         uses: AndreKurait/docker-cache@0.6.0
@@ -152,7 +150,7 @@ jobs:
       - name: Run Gradle tests with striping
         run: |
           MAX_WORKERS=$(( $(nproc) - 1 ))
-          gradle allTests \
+          gradle allTests mergeJacocoReports \
           --max-workers $MAX_WORKERS \
           -Dtest.striping.total=${{ env.gradle-test-parallelization }} \
           -Dtest.striping.index=${{ matrix.index }} \
@@ -170,7 +168,7 @@ jobs:
           fi
       - name: Upload memory dump
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           if-no-files-found: warn
           name: memory-dumps-gradle-tests-stripe-${{ matrix.index }}
@@ -178,55 +176,35 @@ jobs:
 
       - name: Upload test reports for stripe ${{ matrix.index }}
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           if-no-files-found: error
           name: test-reports-gradle-tests-stripe-${{ matrix.index }}
           path: |
             **/build/reports/tests/
 
-      - name: Publish Jacoco report artifact for stripe ${{ matrix.index }}
+      - name: Upload coverage to Codecov
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_SKIP_VALIDATION: true
         with:
-          if-no-files-found: error
-          name: coverage-exec-artifacts-gradle-tests-stripe-${{ matrix.index }}
-          path: |
-            **/build/jacoco/*.exec
+          fail_ci_if_error: true
+          flags: gradle
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
-  jacoco-aggregate:
-    needs: [ gradle-tests ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-env
-      - name: Create clean .exec directory
-        run: rm -rf build/jacocoMerged && mkdir -p build/jacocoMerged
-
-      - name: Download all JaCoCo .exec files into directory expected by jacocoAggregateReport
-        uses: actions/download-artifact@v5
-        with:
-          path: build/jacocoMerged
-          pattern: coverage-exec-artifacts-gradle-tests-*
-          merge-multiple: true
-
-      - name: Generate aggregate JaCoCo report
-        run: gradle jacocoAggregateReport --stacktrace
-
-      - name: Upload Aggregate JaCoCo report
-        uses: actions/upload-artifact@v4
+      - name: Show disk usage
         if: always()
-        with:
-          if-no-files-found: error
-          name: coverage-reports-gradle-tests-aggregate
-          path: |
-            build/reports/jacoco/mergedReport/*
+        run: |
+          df -h
+          docker system df -v
 
   python-e2e-tests:
     needs: [ generate-cache-key ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-env
       - name: Cache Docker Images
         uses: AndreKurait/docker-cache@0.6.0
@@ -241,6 +219,11 @@ jobs:
       - name: Run E2E test script
         run: |
           docker exec $(docker ps --filter "name=migration-console" -q) pipenv run pytest /root/lib/integ_test/integ_test/replayer_tests.py --unique_id="testindex" -s
+      - name: Show disk usage
+        if: always()
+        run: |
+          df -h
+          docker system df -v
       - name: Collect Docker, OpenSearch Benchmark, and Shared Logs
         if: always()
         run: |
@@ -253,7 +236,7 @@ jobs:
           docker cp $(docker ps --filter "name=migration-console" -q):/shared-logs-output logs/shared_logs_output
       - name: Upload Logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           if-no-files-found: error
           name: e2e-test-logs
@@ -267,7 +250,7 @@ jobs:
           docker image ls --format '{{.Repository}}:{{.Tag}}' | grep '^migrations/' | xargs -I {} docker image rm {}
 
   node-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
@@ -279,18 +262,28 @@ jobs:
       run:
         working-directory: ${{ matrix.npm-project }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-env
       - name: Install NPM dependencies
         run: npm ci
       - name: Run CDK Jest Tests (using mocked images)
         run: npm run test
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_SKIP_VALIDATION: true
+        with:
+          fail_ci_if_error: true
+          flags: node
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
   link-checker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: lychee Link Checker
         id: lychee
         uses: lycheeverse/lychee-action@v2
@@ -312,14 +305,13 @@ jobs:
     needs:
       - python-tests
       - gradle-tests
-      - jacoco-aggregate
       - link-checker
       - node-tests
       - python-e2e-tests
       - python-lint
       - gradle-extended-check
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - if: ${{ contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'skipped') }}
         run: |

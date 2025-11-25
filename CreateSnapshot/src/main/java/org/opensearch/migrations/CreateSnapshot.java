@@ -1,6 +1,5 @@
 package org.opensearch.migrations;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.opensearch.migrations.arguments.ArgLogUtils;
@@ -12,6 +11,8 @@ import org.opensearch.migrations.bulkload.common.SnapshotCreator;
 import org.opensearch.migrations.bulkload.common.http.ConnectionContext;
 import org.opensearch.migrations.bulkload.tracing.IRfsContexts.ICreateSnapshotContext;
 import org.opensearch.migrations.bulkload.worker.SnapshotRunner;
+import org.opensearch.migrations.jcommander.EnvVarParameterPuller;
+import org.opensearch.migrations.jcommander.JsonCommandLineParser;
 import org.opensearch.migrations.snapshot.creation.tracing.RootSnapshotContext;
 import org.opensearch.migrations.tracing.ActiveContextTracker;
 import org.opensearch.migrations.tracing.ActiveContextTrackerByActivityType;
@@ -19,7 +20,6 @@ import org.opensearch.migrations.tracing.CompositeContextTracker;
 import org.opensearch.migrations.tracing.RootOtelContext;
 import org.opensearch.migrations.utils.ProcessHelpers;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import com.beust.jcommander.ParametersDelegate;
@@ -100,34 +100,24 @@ public class CreateSnapshot {
         public List<String> indexAllowlist = List.of();
 
         @Parameter(
+                names = {"--compression-enabled"},
+                required = false,
+                description = "Whether to enable metadata compression for the snapshot. Defaults to false.")
+        public boolean compressionEnabled = false;
+
+        @Parameter(
+                names = {"--include-global-state"},
+                required = false,
+                description = "Whether to include global state in the snapshot. Defaults to true.")
+        public boolean includeGlobalState = true;
+
+        @Parameter(
                 required = false,
                 names = {"--otel-collector-endpoint" },
                 arity = 1,
                 description = "Endpoint (host:port) for the OpenTelemetry Collector to which metrics logs should be"
                 + "forwarded. If no value is provided, metrics will not be forwarded.")
         String otelCollectorEndpoint;
-    }
-
-    public static class EnvParameters {
-
-        private EnvParameters() {
-            throw new IllegalStateException("EnvParameters utility class should not instantiated");
-        }
-
-        public static void injectFromEnv(Args args) {
-            List<String> addedEnvParams = new ArrayList<>();
-            if (args.sourceArgs.username == null && System.getenv(ArgNameConstants.SOURCE_USERNAME_ENV_ARG) != null) {
-                args.sourceArgs.username = System.getenv(ArgNameConstants.SOURCE_USERNAME_ENV_ARG);
-                addedEnvParams.add(ArgNameConstants.SOURCE_USERNAME_ENV_ARG);
-            }
-            if (args.sourceArgs.password == null && System.getenv(ArgNameConstants.SOURCE_PASSWORD_ENV_ARG) != null) {
-                args.sourceArgs.password = System.getenv(ArgNameConstants.SOURCE_PASSWORD_ENV_ARG);
-                addedEnvParams.add(ArgNameConstants.SOURCE_PASSWORD_ENV_ARG);
-            }
-            if (!addedEnvParams.isEmpty()) {
-                log.info("Adding parameters from the following expected environment variables: {}", addedEnvParams);
-            }
-        }
     }
 
     @Getter
@@ -139,13 +129,12 @@ public class CreateSnapshot {
 
     public static void main(String[] args) throws Exception {
         System.err.println("Starting program with: " + String.join(" ", ArgLogUtils.getRedactedArgs(args, ArgNameConstants.CENSORED_SOURCE_ARGS)));
-        Args arguments = new Args();
-        JCommander jCommander = JCommander.newBuilder().addObject(arguments).build();
-        jCommander.parse(args);
-        EnvParameters.injectFromEnv(arguments);
+        Args arguments = EnvVarParameterPuller.injectFromEnv(new Args(), "CREATE_SNAPSHOT_");
+        var argParser = JsonCommandLineParser.newBuilder().addObject(arguments).build();
+        argParser.parse(args);
 
         if (arguments.help) {
-            jCommander.usage();
+            argParser.getJCommander().usage();
             return;
         }
 
@@ -183,7 +172,9 @@ public class CreateSnapshot {
                     client,
                     arguments.fileSystemRepoPath,
                     arguments.indexAllowlist,
-                    context
+                    context,
+                    arguments.compressionEnabled,
+                    arguments.includeGlobalState
                 );
         } else {
             snapshotCreator = new S3SnapshotCreator(
@@ -196,7 +187,9 @@ public class CreateSnapshot {
                 arguments.indexAllowlist,
                 arguments.maxSnapshotRateMBPerNode,
                 arguments.s3RoleArn,
-                context
+                context,
+                arguments.compressionEnabled,
+                arguments.includeGlobalState
             );
         }
 
@@ -207,7 +200,7 @@ public class CreateSnapshot {
                 SnapshotRunner.runAndWaitForCompletion(snapshotCreator);
             }
         } catch (Exception e) {
-            log.atError().setCause(e).setMessage("Unexpected error running RfsWorker").log();
+            log.atError().setCause(e).setMessage("Unexpected error running CreateSnapshot").log();
             throw e;
         }
     }
