@@ -289,7 +289,16 @@ def cleanup_snapshots_and_repo(source_cluster, stage, region):
 
 
 def create_transformation_config(multiplication_factor: int):
-    """Create transformation file with multiplication configuration."""
+    """Create transformation file that multiplies each document by a fixed factor.
+
+    For each input document, the transformer will emit MULTIPLICATION_FACTOR
+    documents:
+      - i = 0: original _id is preserved
+      - i > 0: _id='<original_id>_<i>'
+    """
+
+    if multiplication_factor < 1:
+        raise ValueError(f"multiplication_factor must be >= 1, got {multiplication_factor}")
 
     # Remove existing transformation directory
     try:
@@ -298,59 +307,56 @@ def create_transformation_config(multiplication_factor: int):
     except FileNotFoundError:
         logger.info("No existing transformation files to cleanup")
 
-    # One single f-string; use {{ }} to emit literal braces in JS.
     initialization_script = textwrap.dedent(f"""
-        const MULTIPLICATION_FACTOR_WITH_ORIGINAL = {multiplication_factor};
-
-        function jget(obj, key) {{
-          return obj && typeof obj.get === 'function' ? obj.get(key) : (obj ? obj[key] : undefined);
-        }}
-        function jset(obj, key, val) {{
-          if (obj && typeof obj.set === 'function') {{ obj.set(key, val); return obj; }}
-          if (obj) obj[key] = val;
-          return obj;
-        }}
-        function jcloneMapLike(src) {{
-          if (src && typeof src.forEach === 'function') {{
-            const m = new Map(); src.forEach((v,k) => m.set(k, v)); return m;
-          }}
-          return Object.assign({{}}, src || {{}});
-        }}
-        function pickAction(doc) {{
-          for (const k of ['index','create','update','delete']) {{
-            const v = jget(doc, k); if (v !== undefined) return [k, v];
-          }}
-          return [null, null];
-        }}
+        const MULTIPLICATION_FACTOR = {multiplication_factor};
 
         function transform(document) {{
-          if (!document) throw new Error('No source_document was defined - nothing to transform!');
-          const [action, meta] = pickAction(document);
-          if (!action) return [];
-          if (action === 'update' || action === 'delete') return []; // multiply only inserts
-
-          const originalSource = jget(document, 'source') ?? jget(document, '_source') ?? {{}};
-          const originalId = jget(meta, '_id');
-          if (!originalId) return [];
-
-          const out = [];
-          for (let i=0; i<MULTIPLICATION_FACTOR_WITH_ORIGINAL; i++) {{
-            const newMeta = jcloneMapLike(meta);
-            jset(newMeta, '_id', i === 0 ? String(originalId) : String(originalId) + '_' + i);
-
-            // Preserve the original action (index/create)
-            const pair = (typeof Map === 'function')
-              ? new Map([[action, newMeta], ['source', originalSource]])
-              : (function() {{ const o = {{}}; o[action] = newMeta; o.source = originalSource; return o; }})();
-
-            out.push(pair);
+          if (!document) {{
+            throw new Error("No source_document was defined - nothing to transform!");
           }}
-          return out;
+
+          const indexCommandMap = document.get("index");
+          const originalSource = document.get("source");
+
+          if (!indexCommandMap || !originalSource) {{
+            throw new Error("Document is missing 'index' or 'source' Map entries.");
+          }}
+
+          const originalId = indexCommandMap.get("_id");
+          if (!originalId) {{
+            // If there is no _id, we skip this document rather than inventing one.
+            return [];
+          }}
+
+          const docsToCreate = [];
+
+          for (let i = 0; i < MULTIPLICATION_FACTOR; i++) {{
+            const newIndexMap = new Map(indexCommandMap);
+            const newId = (i === 0)
+              ? String(originalId)
+              : String(originalId) + "_" + i;
+
+            newIndexMap.set("_id", newId);
+
+            docsToCreate.push(
+              new Map([
+                ["index", newIndexMap],
+                ["source", originalSource]
+              ])
+            );
+          }}
+
+          return docsToCreate;
         }}
 
         function main(context) {{
-          console.log('Context: ', JSON.stringify((context || {{}}), null, 2));
-          return (doc) => Array.isArray(doc) ? doc.flatMap(transform) : transform(doc);
+          console.log("Context: ", JSON.stringify(context || {{}}, null, 2));
+          return (document) => {{
+            if (Array.isArray(document)) {{
+              return document.flatMap((item) => transform(item));
+            }}
+            return transform(document);
+          }};
         }}
 
         (() => main)();
