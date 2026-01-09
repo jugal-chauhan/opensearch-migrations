@@ -23,6 +23,41 @@ def call(Map config = [:]) {
         }
 
         stages {
+            stage('Print Configuration') {
+                steps {
+                    script {
+                        echo """
+╔══════════════════════════════════════════════════════════════════╗
+║                    PIPELINE CONFIGURATION                        ║
+╠══════════════════════════════════════════════════════════════════╣
+║  USER-CONFIGURABLE PARAMETERS                                    ║
+╠══════════════════════════════════════════════════════════════════╣
+║  GIT_REPO_URL:        ${params.GIT_REPO_URL}
+║  GIT_BRANCH:          ${params.GIT_BRANCH}
+║  STAGE:               ${params.STAGE}
+║  REGION:              ${params.REGION}
+║  SKIP_TARGET_DEPLOY:  ${params.SKIP_TARGET_DEPLOY}
+║  SKIP_TARGET_DESTROY: ${params.SKIP_TARGET_DESTROY}
+║  SKIP_MA_DEPLOY:      ${params.SKIP_MA_DEPLOY}
+║  SKIP_MA_DESTROY:     ${params.SKIP_MA_DESTROY}
+╠══════════════════════════════════════════════════════════════════╣
+║  HARDCODED TARGET CLUSTER CONFIGURATION                          ║
+╠══════════════════════════════════════════════════════════════════╣
+║  clusterVersion:              OS_2.19
+║  dataNodeCount:               6
+║  dataNodeType:                r6g.4xlarge.search
+║  dedicatedManagerNodeCount:   4
+║  dedicatedManagerNodeType:    m6g.xlarge.search
+║  ebsEnabled:                  true
+║  ebsVolumeSize:               1024 GB
+║  nodeToNodeEncryptionEnabled: true
+║  openAccessPolicyEnabled:     true
+╚══════════════════════════════════════════════════════════════════╝
+"""
+                    }
+                }
+            }
+
             stage('Checkout') {
                 steps {
                     checkoutStep(branch: params.GIT_BRANCH, repo: params.GIT_REPO_URL)
