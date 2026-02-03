@@ -1077,7 +1077,7 @@ sys.exit(0 if all_finished else 1)'",
               "name": "targetBasicCredsSecretNameOrEmpty",
             },
             {
-              "name": "coordinatorBasicCredsSecretNameOrEmpty",
+              "name": "rfsopensearchBasicCredsSecretNameOrEmpty",
             },
             {
               "name": "podReplicas",
@@ -1148,16 +1148,16 @@ spec:
                   name: "{{=((0 == len(inputs.parameters.targetBasicCredsSecretNameOrEmpty)) ? ('empty') : (inputs.parameters.targetBasicCredsSecretNameOrEmpty))}}"
                   key: password
                   optional: true
-            - name: COORDINATOR_USERNAME
+            - name: RFS_OPENSEARCH_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: "{{=((0 == len(inputs.parameters.coordinatorBasicCredsSecretNameOrEmpty)) ? ('empty') : (inputs.parameters.coordinatorBasicCredsSecretNameOrEmpty))}}"
+                  name: "{{=((0 == len(inputs.parameters.rfsopensearchBasicCredsSecretNameOrEmpty)) ? ('empty') : (inputs.parameters.rfsopensearchBasicCredsSecretNameOrEmpty))}}"
                   key: username
                   optional: true
-            - name: COORDINATOR_PASSWORD
+            - name: RFS_OPENSEARCH_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: "{{=((0 == len(inputs.parameters.coordinatorBasicCredsSecretNameOrEmpty)) ? ('empty') : (inputs.parameters.coordinatorBasicCredsSecretNameOrEmpty))}}"
+                  name: "{{=((0 == len(inputs.parameters.rfsopensearchBasicCredsSecretNameOrEmpty)) ? ('empty') : (inputs.parameters.rfsopensearchBasicCredsSecretNameOrEmpty))}}"
                   key: password
                   optional: true
             - name: FAILED_REQUESTS_LOGGER_LEVEL
@@ -1204,7 +1204,7 @@ spec:
               "name": "targetConfig",
             },
             {
-              "name": "coordinatorConfig",
+              "name": "rfsopensearchConfig",
             },
             {
               "name": "documentBackfillConfig",
@@ -1247,8 +1247,8 @@ spec:
                     "value": "{{=sprig.dig('authConfig', 'basic', 'secretName', '', fromJSON(inputs.parameters.targetConfig))}}",
                   },
                   {
-                    "name": "coordinatorBasicCredsSecretNameOrEmpty",
-                    "value": "{{=sprig.dig('authConfig', 'basic', 'secretName', '', fromJSON(inputs.parameters.coordinatorConfig))}}",
+                    "name": "rfsopensearchBasicCredsSecretNameOrEmpty",
+                    "value": "{{=sprig.dig('authConfig', 'basic', 'secretName', '', fromJSON(inputs.parameters.rfsopensearchConfig))}}",
                   },
                   {
                     "name": "loggingConfigurationOverrideConfigMap",
@@ -1260,7 +1260,7 @@ spec:
                   },
                   {
                     "name": "rfsJsonConfig",
-                    "value": "{{=toJSON(sprig.merge(sprig.merge(sprig.merge(sprig.merge(sprig.merge((('authConfig' in fromJSON(inputs.parameters.targetConfig)) ? ((('sigv4' in fromJSON(inputs.parameters.targetConfig)['authConfig']) ? (sprig.dict("targetAwsServiceSigningName", fromJSON(inputs.parameters.targetConfig)['authConfig']['sigv4']['service'], "targetAwsRegion", fromJSON(inputs.parameters.targetConfig)['authConfig']['sigv4']['region'])) : ((('mtls' in fromJSON(inputs.parameters.targetConfig)['authConfig']) ? (sprig.dict("targetCaCert", fromJSON(inputs.parameters.targetConfig)['authConfig']['mtls']['caCert'])) : ({}))))) : ({})), (('endpoint' in fromJSON(inputs.parameters.targetConfig)) ? (sprig.dict("targetHost", fromJSON(inputs.parameters.targetConfig)['endpoint'])) : ({}))), sprig.dict("targetInsecure", sprig.dig('allowInsecure', false, fromJSON(inputs.parameters.targetConfig)))), sprig.merge(sprig.merge((('authConfig' in fromJSON(inputs.parameters.coordinatorConfig)) ? ((('sigv4' in fromJSON(inputs.parameters.coordinatorConfig)['authConfig']) ? (sprig.dict("coordinatorAwsServiceSigningName", fromJSON(inputs.parameters.coordinatorConfig)['authConfig']['sigv4']['service'], "coordinatorAwsRegion", fromJSON(inputs.parameters.coordinatorConfig)['authConfig']['sigv4']['region'])) : ((('mtls' in fromJSON(inputs.parameters.coordinatorConfig)['authConfig']) ? (sprig.dict("coordinatorCaCert", fromJSON(inputs.parameters.coordinatorConfig)['authConfig']['mtls']['caCert'])) : ({}))))) : ({})), (('endpoint' in fromJSON(inputs.parameters.coordinatorConfig)) ? (sprig.dict("coordinatorHost", fromJSON(inputs.parameters.coordinatorConfig)['endpoint'])) : ({}))), sprig.dict("coordinatorInsecure", sprig.dig('allowInsecure', false, fromJSON(inputs.parameters.coordinatorConfig))))), sprig.omit(fromJSON(inputs.parameters.documentBackfillConfig), 'loggingConfigurationOverrideConfigMap', 'podReplicas', 'resources')), sprig.merge(sprig.dict("snapshotName", fromJSON(inputs.parameters.snapshotConfig)['snapshotName'], "sourceVersion", inputs.parameters.sourceVersion, "sessionName", inputs.parameters.sessionName, "luceneDir", '/tmp', "cleanLocalDirs", true), sprig.merge(sprig.merge(((0 == len(sprig.dig('endpoint', '', sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')))) ? (sprig.dict()) : (sprig.dict("s3Endpoint", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['endpoint']))), ((0 == len(sprig.dig('s3RoleArn', '', sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')))) ? (sprig.dict()) : (sprig.dict("s3RoleArn", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['s3RoleArn'])))), sprig.dict("s3RepoUri", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['s3RepoPathUri'], "s3Region", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['awsRegion'], "s3LocalDir", '/tmp')))))}}",
+                    "value": "{{=toJSON(sprig.merge(sprig.merge(sprig.merge(sprig.merge(sprig.merge((('authConfig' in fromJSON(inputs.parameters.targetConfig)) ? ((('sigv4' in fromJSON(inputs.parameters.targetConfig)['authConfig']) ? (sprig.dict("targetAwsServiceSigningName", fromJSON(inputs.parameters.targetConfig)['authConfig']['sigv4']['service'], "targetAwsRegion", fromJSON(inputs.parameters.targetConfig)['authConfig']['sigv4']['region'])) : ((('mtls' in fromJSON(inputs.parameters.targetConfig)['authConfig']) ? (sprig.dict("targetCaCert", fromJSON(inputs.parameters.targetConfig)['authConfig']['mtls']['caCert'])) : ({}))))) : ({})), (('endpoint' in fromJSON(inputs.parameters.targetConfig)) ? (sprig.dict("targetHost", fromJSON(inputs.parameters.targetConfig)['endpoint'])) : ({}))), sprig.dict("targetInsecure", sprig.dig('allowInsecure', false, fromJSON(inputs.parameters.targetConfig)))), sprig.merge(sprig.merge((('authConfig' in fromJSON(inputs.parameters.rfsopensearchConfig)) ? ((('sigv4' in fromJSON(inputs.parameters.rfsopensearchConfig)['authConfig']) ? (sprig.dict("rfsopensearchAwsServiceSigningName", fromJSON(inputs.parameters.rfsopensearchConfig)['authConfig']['sigv4']['service'], "rfsopensearchAwsRegion", fromJSON(inputs.parameters.rfsopensearchConfig)['authConfig']['sigv4']['region'])) : ((('mtls' in fromJSON(inputs.parameters.rfsopensearchConfig)['authConfig']) ? (sprig.dict("rfsopensearchCaCert", fromJSON(inputs.parameters.rfsopensearchConfig)['authConfig']['mtls']['caCert'])) : ({}))))) : ({})), (('endpoint' in fromJSON(inputs.parameters.rfsopensearchConfig)) ? (sprig.dict("rfsopensearchHost", fromJSON(inputs.parameters.rfsopensearchConfig)['endpoint'])) : ({}))), sprig.dict("rfsopensearchInsecure", sprig.dig('allowInsecure', false, fromJSON(inputs.parameters.rfsopensearchConfig))))), sprig.omit(fromJSON(inputs.parameters.documentBackfillConfig), 'loggingConfigurationOverrideConfigMap', 'podReplicas', 'resources')), sprig.merge(sprig.dict("snapshotName", fromJSON(inputs.parameters.snapshotConfig)['snapshotName'], "sourceVersion", inputs.parameters.sourceVersion, "sessionName", inputs.parameters.sessionName, "luceneDir", '/tmp', "cleanLocalDirs", true), sprig.merge(sprig.merge(((0 == len(sprig.dig('endpoint', '', sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')))) ? (sprig.dict()) : (sprig.dict("s3Endpoint", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['endpoint']))), ((0 == len(sprig.dig('s3RoleArn', '', sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')))) ? (sprig.dict()) : (sprig.dict("s3RoleArn", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['s3RoleArn'])))), sprig.dict("s3RepoUri", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['s3RepoPathUri'], "s3Region", sprig.omit(fromJSON(inputs.parameters.snapshotConfig)['repoConfig'], 's3RoleArn')['awsRegion'], "s3LocalDir", '/tmp')))))}}",
                   },
                   {
                     "name": "resources",
@@ -1284,7 +1284,7 @@ spec:
               "name": "targetConfig",
             },
             {
-              "name": "coordinatorConfig",
+              "name": "rfsopensearchConfig",
             },
             {
               "name": "snapshotConfig",
@@ -1339,8 +1339,8 @@ spec:
                     "value": "{{inputs.parameters.targetConfig}}",
                   },
                   {
-                    "name": "coordinatorConfig",
-                    "value": "{{inputs.parameters.coordinatorConfig}}",
+                    "name": "rfsopensearchConfig",
+                    "value": "{{inputs.parameters.rfsopensearchConfig}}",
                   },
                   {
                     "name": "documentBackfillConfig",
@@ -1366,7 +1366,7 @@ spec:
                 "parameters": [
                   {
                     "name": "targetConfig",
-                    "value": "{{inputs.parameters.coordinatorConfig}}",
+                    "value": "{{inputs.parameters.rfsopensearchConfig}}",
                   },
                   {
                     "name": "snapshotConfig",
@@ -1481,10 +1481,6 @@ spec:
               "arguments": {
                 "parameters": [
                   {
-                    "name": "clusterName",
-                    "value": "{{=inputs.parameters.sessionName+'-rfs-opensearch'}}",
-                  },
-                  {
                     "name": "imageMigrationConsoleLocation",
                     "value": "{{inputs.parameters.imageMigrationConsoleLocation}}",
                   },
@@ -1492,9 +1488,13 @@ spec:
                     "name": "imageMigrationConsolePullPolicy",
                     "value": "{{inputs.parameters.imageMigrationConsolePullPolicy}}",
                   },
+                  {
+                    "name": "clusterName",
+                    "value": "{{=inputs.parameters.sessionName+'-rfs-opensearch'}}",
+                  },
                 ],
               },
-              "name": "deployRfsOpenSearch",
+              "name": "createRFSOpenSearch",
               "templateRef": {
                 "name": "rfs-opensearch-cluster",
                 "template": "createallrfsopensearch",
@@ -1547,8 +1547,8 @@ spec:
                     "value": "{{inputs.parameters.imageMigrationConsolePullPolicy}}",
                   },
                   {
-                    "name": "coordinatorConfig",
-                    "value": "{{=((!(sprig.dig('useTargetClusterForWorkCoordination', true, fromJSON(inputs.parameters.documentBackfillConfig)))) ? (steps.deployRfsOpenSearch.outputs.parameters.rfsOpenSearchConfig) : (inputs.parameters.targetConfig))}}",
+                    "name": "rfsopensearchConfig",
+                    "value": "{{=((!(sprig.dig('useTargetClusterForWorkCoordination', true, fromJSON(inputs.parameters.documentBackfillConfig)))) ? (toJSON(sprig.merge(fromJSON(steps.createRFSOpenSearch.outputs.parameters.rfsOpenSearchConfig), sprig.dict("name", 'rfsopensearch')))) : (inputs.parameters.targetConfig))}}",
                   },
                 ],
               },
@@ -1566,7 +1566,7 @@ spec:
                   },
                 ],
               },
-              "name": "cleanupRfsOpenSearch",
+              "name": "cleanupRFSOpenSearch",
               "templateRef": {
                 "name": "rfs-opensearch-cluster",
                 "template": "deleteallrfsopensearch",

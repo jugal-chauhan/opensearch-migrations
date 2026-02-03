@@ -347,7 +347,7 @@ echo "RFS OpenSearch Cluster is ready!"`,
         )
         .addExpressionOutput("rfsOpenSearchConfig", b =>
             expr.serialize(expr.makeDict({
-                name: expr.literal("rfsOpenSearch"),
+                name: expr.literal("rfsopensearch"),
                 endpoint: expr.concat(expr.literal("https://"), b.inputs.clusterName, expr.literal(":9200")),
                 allowInsecure: expr.literal(true),
                 authConfig: expr.makeDict({

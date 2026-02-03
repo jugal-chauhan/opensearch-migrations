@@ -30,7 +30,7 @@ import {
 } from "./commonUtils/containerFragments";
 import {CommonWorkflowParameters} from "./commonUtils/workflowParameters";
 import {makeRequiredImageParametersForKeys} from "./commonUtils/imageDefinitions";
-import {makeTargetParamDict, makeCoordinatorParamDict} from "./commonUtils/clusterSettingManipulators";
+import {makeTargetParamDict, makeRFSOpenSearchParamDict} from "./commonUtils/clusterSettingManipulators";
 import {getHttpAuthSecretName} from "./commonUtils/clusterSettingManipulators";
 import {shouldCreateRFSWorkCoordinationCluster} from "./commonUtils/workCoordinationHelpers";
 import {RFSOpenSearchCluster, getRfsOpenSearchClusterName} from "./rfsOpenSearchCluster";
@@ -38,7 +38,7 @@ import {RFSOpenSearchCluster, getRfsOpenSearchClusterName} from "./rfsOpenSearch
 function makeParamsDict(
     sourceVersion: BaseExpression<z.infer<typeof CLUSTER_VERSION_STRING>>,
     targetConfig: BaseExpression<Serialized<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>>,
-    coordinatorConfig: BaseExpression<Serialized<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>>,
+    rfsopensearchConfig: BaseExpression<Serialized<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>>,
     snapshotConfig: BaseExpression<Serialized<z.infer<typeof COMPLETE_SNAPSHOT_CONFIG>>>,
     options: BaseExpression<Serialized<z.infer<typeof RFS_OPTIONS>>>,
     sessionName: BaseExpression<string>
@@ -47,7 +47,7 @@ function makeParamsDict(
         expr.mergeDicts(
             expr.mergeDicts(
                 makeTargetParamDict(targetConfig),
-                makeCoordinatorParamDict(coordinatorConfig)
+                makeRFSOpenSearchParamDict(rfsopensearchConfig)
             ),
             expr.omit(expr.deserializeRecord(options), "loggingConfigurationOverrideConfigMap", "podReplicas", "resources")
         ),
@@ -77,7 +77,7 @@ function getRfsReplicasetManifest
     sessionName: BaseExpression<string>,
     podReplicas: BaseExpression<number>,
     targetBasicCredsSecretNameOrEmpty: AllowLiteralOrExpression<string>,
-    coordinatorBasicCredsSecretNameOrEmpty: AllowLiteralOrExpression<string>,
+    rfsopensearchBasicCredsSecretNameOrEmpty: AllowLiteralOrExpression<string>,
 
     useLocalstackAwsCreds: BaseExpression<boolean>,
     loggingConfigMap: BaseExpression<string>,
@@ -91,10 +91,10 @@ function getRfsReplicasetManifest
         expr.literal("empty"),
         args.targetBasicCredsSecretNameOrEmpty
     );
-    const coordinatorBasicCredsSecretName = expr.ternary(
-        expr.isEmpty(args.coordinatorBasicCredsSecretNameOrEmpty),
+    const rfsopensearchBasicCredsSecretName = expr.ternary(
+        expr.isEmpty(args.rfsopensearchBasicCredsSecretNameOrEmpty),
         expr.literal("empty"),
-        args.coordinatorBasicCredsSecretNameOrEmpty
+        args.rfsopensearchBasicCredsSecretNameOrEmpty
     );
     const useCustomLogging = expr.not(expr.isEmpty(args.loggingConfigMap));
     const baseContainerDefinition = {
@@ -138,20 +138,20 @@ function getRfsReplicasetManifest
                 }
             },
             {
-                name: "COORDINATOR_USERNAME",
+                name: "RFS_OPENSEARCH_USERNAME",
                 valueFrom: {
                     secretKeyRef: {
-                        name: makeStringTypeProxy(coordinatorBasicCredsSecretName),
+                        name: makeStringTypeProxy(rfsopensearchBasicCredsSecretName),
                         key: "username",
                         optional: true
                     }
                 }
             },
             {
-                name: "COORDINATOR_PASSWORD",
+                name: "RFS_OPENSEARCH_PASSWORD",
                 valueFrom: {
                     secretKeyRef: {
-                        name: makeStringTypeProxy(coordinatorBasicCredsSecretName),
+                        name: makeStringTypeProxy(rfsopensearchBasicCredsSecretName),
                         key: "password",
                         optional: true
                     }
@@ -283,7 +283,7 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addRequiredInput("sessionName", typeToken<string>())
         .addRequiredInput("rfsJsonConfig", typeToken<string>())
         .addRequiredInput("targetBasicCredsSecretNameOrEmpty", typeToken<string>())
-        .addRequiredInput("coordinatorBasicCredsSecretNameOrEmpty", typeToken<string>())
+        .addRequiredInput("rfsopensearchBasicCredsSecretNameOrEmpty", typeToken<string>())
         .addRequiredInput("podReplicas", typeToken<number>())
         .addRequiredInput("loggingConfigurationOverrideConfigMap", typeToken<string>())
         .addRequiredInput("useLocalStack", typeToken<boolean>(), "Only used for local testing")
@@ -300,7 +300,7 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
                     useLocalstackAwsCreds: expr.deserializeRecord(b.inputs.useLocalStack),
                     sessionName: b.inputs.sessionName,
                     targetBasicCredsSecretNameOrEmpty: b.inputs.targetBasicCredsSecretNameOrEmpty,
-                    coordinatorBasicCredsSecretNameOrEmpty: b.inputs.coordinatorBasicCredsSecretNameOrEmpty,
+                    rfsopensearchBasicCredsSecretNameOrEmpty: b.inputs.rfsopensearchBasicCredsSecretNameOrEmpty,
                     rfsImageName: b.inputs.imageReindexFromSnapshotLocation,
                     rfsImagePullPolicy: b.inputs.imageReindexFromSnapshotPullPolicy,
                     workflowName: expr.getWorkflowValue("name"),
@@ -317,7 +317,7 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
 
         .addRequiredInput("snapshotConfig", typeToken<z.infer<typeof COMPLETE_SNAPSHOT_CONFIG>>())
         .addRequiredInput("targetConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
-        .addRequiredInput("coordinatorConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
+        .addRequiredInput("rfsopensearchConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof RFS_OPTIONS>>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot"]))
 
@@ -327,13 +327,13 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
                     ...selectInputsForRegister(b,c),
                     podReplicas: expr.dig(expr.deserializeRecord(b.inputs.documentBackfillConfig), ["podReplicas"], 1),
                     targetBasicCredsSecretNameOrEmpty: getHttpAuthSecretName(b.inputs.targetConfig),
-                    coordinatorBasicCredsSecretNameOrEmpty: getHttpAuthSecretName(b.inputs.coordinatorConfig),
+                    rfsopensearchBasicCredsSecretNameOrEmpty: getHttpAuthSecretName(b.inputs.rfsopensearchConfig),
                     loggingConfigurationOverrideConfigMap: expr.dig(expr.deserializeRecord(b.inputs.documentBackfillConfig), ["loggingConfigurationOverrideConfigMap"], ""),
                     useLocalStack: expr.dig(expr.deserializeRecord(b.inputs.snapshotConfig), ["repoConfig", "useLocalStack"], false),
                     rfsJsonConfig: expr.asString(expr.serialize(
                         makeParamsDict(b.inputs.sourceVersion,
                             b.inputs.targetConfig,
-                            b.inputs.coordinatorConfig,
+                            b.inputs.rfsopensearchConfig,
                             b.inputs.snapshotConfig,
                             b.inputs.documentBackfillConfig,
                             b.inputs.sessionName)
@@ -348,7 +348,7 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
     .addTemplate("runBulkLoad", t => t
         .addRequiredInput("sourceVersion", typeToken<z.infer<typeof CLUSTER_VERSION_STRING>>())
         .addRequiredInput("targetConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
-        .addRequiredInput("coordinatorConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
+        .addRequiredInput("rfsopensearchConfig", typeToken<z.infer<typeof NAMED_TARGET_CLUSTER_CONFIG>>())
         .addRequiredInput("snapshotConfig", typeToken<z.infer<typeof COMPLETE_SNAPSHOT_CONFIG>>())
         .addRequiredInput("sessionName", typeToken<string>())
         .addOptionalInput("indices", c => [] as readonly string[])
@@ -363,7 +363,7 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
             .addStep("setupWaitForCompletion", MigrationConsole, "getConsoleConfig", c =>
                 c.register({
                     ...selectInputsForRegister(b, c),
-                    targetConfig: b.inputs.coordinatorConfig
+                    targetConfig: b.inputs.rfsopensearchConfig
                 }))
             .addStep("waitForCompletion", INTERNAL, "waitForCompletion", c =>
                 c.register({
@@ -405,11 +405,11 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
                 .addStep("runBulkLoad", INTERNAL, "runBulkLoad", c =>
                     c.register({
                         ...selectInputsForRegister(b, c),
-                        coordinatorConfig: expr.ternary(
+                        rfsopensearchConfig: expr.ternary(
                             createRFSCluster,
                             expr.serialize(expr.mergeDicts(
                                 expr.deserializeRecord(c.steps.createRFSOpenSearch.outputs.rfsOpenSearchConfig),
-                                expr.makeDict({ name: expr.literal("coordinator") })
+                                expr.makeDict({ name: expr.literal("rfsopensearch") })
                             )),
                             b.inputs.targetConfig
                         )
