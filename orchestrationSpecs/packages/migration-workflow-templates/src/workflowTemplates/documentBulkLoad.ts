@@ -391,6 +391,7 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addSteps(b => b
             // To conditionally deploy coordinator cluster, use:
             // { when: { templateExp: shouldDeployCoordinatorCluster(b.inputs.documentBackfillConfig) } }
+            // Example: .addStep("deployCoordinator", CoordinatorCluster, "deployAll", undefined, {...})
             .addStep("configureCoordinator", INTERNAL, "doNothing")
             .addStep("runBulkLoad", INTERNAL, "runBulkLoad", c =>
                 c.register({
