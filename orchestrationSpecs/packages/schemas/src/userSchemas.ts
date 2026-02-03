@@ -197,6 +197,7 @@ export const USER_RFS_OPTIONS = z.object({
     otelCollectorEndpoint: z.string().default("http://otel-collector:4317").optional(),
 
     skipApproval: z.boolean().default(false).optional(),  // TODO - fullmigration
+    useTargetClusterForWorkCoordination: z.boolean().default(true).optional(),
     resources: z.preprocess((v) =>
             deepmerge(DEFAULT_RESOURCES.RFS, (v ?? {})),
         RESOURCE_REQUIREMENTS
