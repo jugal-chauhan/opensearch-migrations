@@ -6,20 +6,20 @@ import {z} from "zod";
  * Determines whether a separate coordinator cluster should be deployed for RFS.
  * 
  * @param documentBackfillConfig - Serialized RFS configuration
- * @returns true if Target Cluster is used for work coordination (no new cluster)
+ * @returns true if a new coordinator cluster should be created (when NOT using target cluster)
  * 
  * @example
  * // Use in workflow step conditions:
- * { when: { templateExp: shouldDeployCoordinatorCluster(b.inputs.documentBackfillConfig) } }
+ * { when: { templateExp: shouldCreateRFSWorkCoordinationCluster(b.inputs.documentBackfillConfig) } }
  */
-export function shouldDeployCoordinatorCluster(
+export function shouldCreateRFSWorkCoordinationCluster(
     documentBackfillConfig: BaseExpression<Serialized<z.infer<typeof RFS_OPTIONS>>>
-): BaseExpression<boolean> {
+): BaseExpression<boolean, "complicatedExpression"> {
     return expr.not(
         expr.dig(
             expr.deserializeRecord(documentBackfillConfig),
             ["useTargetClusterForWorkCoordination"],
             true  // Default: use target cluster
         )
-    );
+    ) as BaseExpression<boolean, "complicatedExpression">;
 }
