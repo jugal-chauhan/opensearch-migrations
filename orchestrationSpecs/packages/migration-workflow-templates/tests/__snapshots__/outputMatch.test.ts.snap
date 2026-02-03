@@ -1479,10 +1479,27 @@ spec:
           [
             {
               "arguments": {
-                "parameters": [],
+                "parameters": [
+                  {
+                    "name": "clusterName",
+                    "value": "{{=inputs.parameters.sessionName+'-rfs-opensearch'}}",
+                  },
+                  {
+                    "name": "imageMigrationConsoleLocation",
+                    "value": "{{inputs.parameters.imageMigrationConsoleLocation}}",
+                  },
+                  {
+                    "name": "imageMigrationConsolePullPolicy",
+                    "value": "{{inputs.parameters.imageMigrationConsolePullPolicy}}",
+                  },
+                ],
               },
-              "name": "configureCoordinator",
-              "template": "donothing",
+              "name": "deployRfsOpenSearch",
+              "templateRef": {
+                "name": "rfs-opensearch-cluster",
+                "template": "createallrfsopensearch",
+              },
+              "when": "{{=!(sprig.dig('useTargetClusterForWorkCoordination', true, fromJSON(inputs.parameters.documentBackfillConfig)))}}",
             },
           ],
           [
@@ -1531,12 +1548,30 @@ spec:
                   },
                   {
                     "name": "coordinatorConfig",
-                    "value": "{{inputs.parameters.targetConfig}}",
+                    "value": "{{=((!(sprig.dig('useTargetClusterForWorkCoordination', true, fromJSON(inputs.parameters.documentBackfillConfig)))) ? (steps.deployRfsOpenSearch.outputs.parameters.rfsOpenSearchConfig) : (inputs.parameters.targetConfig))}}",
                   },
                 ],
               },
               "name": "runBulkLoad",
               "template": "runbulkload",
+            },
+          ],
+          [
+            {
+              "arguments": {
+                "parameters": [
+                  {
+                    "name": "clusterName",
+                    "value": "{{=inputs.parameters.sessionName+'-rfs-opensearch'}}",
+                  },
+                ],
+              },
+              "name": "cleanupRfsOpenSearch",
+              "templateRef": {
+                "name": "rfs-opensearch-cluster",
+                "template": "deleteallrfsopensearch",
+              },
+              "when": "{{=!(sprig.dig('useTargetClusterForWorkCoordination', true, fromJSON(inputs.parameters.documentBackfillConfig)))}}",
             },
           ],
         ],

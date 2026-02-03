@@ -32,7 +32,8 @@ import {CommonWorkflowParameters} from "./commonUtils/workflowParameters";
 import {makeRequiredImageParametersForKeys} from "./commonUtils/imageDefinitions";
 import {makeTargetParamDict, makeCoordinatorParamDict} from "./commonUtils/clusterSettingManipulators";
 import {getHttpAuthSecretName} from "./commonUtils/clusterSettingManipulators";
-import {shouldDeployCoordinatorCluster} from "./commonUtils/workCoordinationHelpers";
+import {shouldCreateRFSWorkCoordinationCluster} from "./commonUtils/workCoordinationHelpers";
+import {RFSOpenSearchCluster, getRfsOpenSearchClusterName} from "./rfsOpenSearchCluster";
 
 function makeParamsDict(
     sourceVersion: BaseExpression<z.infer<typeof CLUSTER_VERSION_STRING>>,
@@ -388,17 +389,40 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addRequiredInput("documentBackfillConfig", typeToken<z.infer<typeof RFS_OPTIONS>>())
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot", "MigrationConsole"]))
 
-        .addSteps(b => b
-            // To conditionally deploy coordinator cluster, use:
-            // { when: { templateExp: shouldDeployCoordinatorCluster(b.inputs.documentBackfillConfig) } }
-            // Example: .addStep("deployCoordinator", CoordinatorCluster, "deployAll", undefined, {...})
-            .addStep("configureCoordinator", INTERNAL, "doNothing")
-            .addStep("runBulkLoad", INTERNAL, "runBulkLoad", c =>
-                c.register({
-                    ...selectInputsForRegister(b, c),
-                    coordinatorConfig: b.inputs.targetConfig
-                }))
-        )
+        .addSteps(b => {
+            const createRFSCluster = shouldCreateRFSWorkCoordinationCluster(b.inputs.documentBackfillConfig);
+            return b
+                // (conditional) Deploy a opensearch cluster for RFS work coordination 
+                .addStep("createRFSOpenSearch", RFSOpenSearchCluster, "createAllRFSOpenSearch", c =>
+                    c.register({
+                        ...selectInputsForRegister(b, c),
+                        clusterName: getRfsOpenSearchClusterName(b.inputs.sessionName)
+                    }),
+                    { when: { templateExp: createRFSCluster }}
+                )
+
+                // Always run bulk load, use deployed cluster or target cluster based on flag 'createRFSCluster'
+                .addStep("runBulkLoad", INTERNAL, "runBulkLoad", c =>
+                    c.register({
+                        ...selectInputsForRegister(b, c),
+                        coordinatorConfig: expr.ternary(
+                            createRFSCluster,
+                            expr.serialize(expr.mergeDicts(
+                                expr.deserializeRecord(c.steps.createRFSOpenSearch.outputs.rfsOpenSearchConfig),
+                                expr.makeDict({ name: expr.literal("coordinator") })
+                            )),
+                            b.inputs.targetConfig
+                        )
+                    }))
+
+                // (conditional) Cleanup opensearch cluster for RFS work coordination 
+                .addStep("cleanupRFSOpenSearch", RFSOpenSearchCluster, "deleteAllRFSOpenSearch", c =>
+                    c.register({
+                        clusterName: getRfsOpenSearchClusterName(b.inputs.sessionName)
+                    }),
+                    { when: { templateExp: createRFSCluster }}
+                );
+        })
     )
 
     .getFullScope();
