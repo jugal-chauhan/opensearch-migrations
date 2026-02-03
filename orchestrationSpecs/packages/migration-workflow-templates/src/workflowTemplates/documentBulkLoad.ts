@@ -32,6 +32,7 @@ import {CommonWorkflowParameters} from "./commonUtils/workflowParameters";
 import {makeRequiredImageParametersForKeys} from "./commonUtils/imageDefinitions";
 import {makeTargetParamDict, makeCoordinatorParamDict} from "./commonUtils/clusterSettingManipulators";
 import {getHttpAuthSecretName} from "./commonUtils/clusterSettingManipulators";
+import {shouldDeployCoordinatorCluster} from "./commonUtils/workCoordinationHelpers";
 
 function makeParamsDict(
     sourceVersion: BaseExpression<z.infer<typeof CLUSTER_VERSION_STRING>>,
@@ -388,6 +389,8 @@ export const DocumentBulkLoad = WorkflowBuilder.create({
         .addInputsFromRecord(makeRequiredImageParametersForKeys(["ReindexFromSnapshot", "MigrationConsole"]))
 
         .addSteps(b => b
+            // To conditionally deploy coordinator cluster, use:
+            // { when: { templateExp: shouldDeployCoordinatorCluster(b.inputs.documentBackfillConfig) } }
             .addStep("configureCoordinator", INTERNAL, "doNothing")
             .addStep("runBulkLoad", INTERNAL, "runBulkLoad", c =>
                 c.register({
