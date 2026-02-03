@@ -211,7 +211,7 @@ charts:
 
 
   cert-manager:
-    version: 1.17.2
+    version: 1.19.3
     repository: https://charts.jetstack.io
     waitForInstallation: true
     values:
@@ -219,7 +219,7 @@ charts:
         enabled: true
 
   opentelemetry-operator:
-    version: "0.86.4"
+    version: "0.105.0"
     repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
     timeout: 300
     dependsOn: cert-manager
@@ -238,7 +238,7 @@ charts:
 
 
   strimzi-kafka-operator:
-    version: 0.47.0
+    version: 0.50.0
     repository: "https://strimzi.io/charts/"
     values:
       replicas: 1
@@ -281,7 +281,7 @@ charts:
           failureThreshold: 1
 
   argo-workflows:
-    version: "0.47.1"
+    version: "0.47.3"
     repository: "https://argoproj.github.io/argo-helm"
     values:
       fullnameOverride: "argo"
@@ -350,7 +350,7 @@ charts:
           name: argo-workflow-executor
 
   fluent-bit:
-    version: "0.49.0"
+    version: "0.55.0"
     repository: "https://fluent.github.io/helm-charts"
     values:
       env:
@@ -484,7 +484,7 @@ charts:
   # Will likely be required for auto-scaling.
   # Notice that we don't install otel-collector yet, so we can't take advantage of this anyway.
   kube-prometheus-stack:
-    version: "72.0.0"
+    version: "81.4.3"
     repository: "https://prometheus-community.github.io/helm-charts"
     values:
       prometheus:
@@ -559,7 +559,7 @@ charts:
 #      enableExternalData: true
 
   localstack:
-    version: "0.6.23"  # Or whichever version you want to use
+    version: "0.6.27"  # Or whichever version you want to use
     repository: "https://localstack.github.io/helm-charts"
     values:
       image:
@@ -567,7 +567,7 @@ charts:
         tag: "4.3.0"
 
   grafana:
-    version: "8.15.0"
+    version: "10.5.15"
     repository: "https://grafana.github.io/helm-charts"
     values:
       ## Grafana data sources configuration
@@ -596,7 +596,7 @@ charts:
 #          label: grafana_dashboard
 
   jaeger:
-    version: "3.2.0"
+    version: "4.4.6"
     repository: "https://jaegertracing.github.io/helm-charts"
     values:
       provisionDataStore:
@@ -613,7 +613,7 @@ charts:
         enabled: false
 
   kyverno:
-    version: "3.5.2"
+    version: "3.7.0"
     repository: "https://kyverno.github.io/kyverno/"
     namespace: ma
     values:
