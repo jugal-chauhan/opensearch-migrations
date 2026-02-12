@@ -10,6 +10,48 @@ TMP_DIR_PATH="$TEST_DIR_PATH/tmp"
 EC2_SOURCE_CDK_PATH="$ROOT_REPO_PATH/test/opensearch-cluster-cdk"
 MIGRATION_CDK_PATH="$ROOT_REPO_PATH/deployment/cdk/opensearch-service-migration"
 
+# Restart Elasticsearch on source EC2 nodes to pick up fresh AWS credentials from IMDS.
+# ES 6.8's repository-s3 plugin uses EC2ContainerCredentialsProviderWrapper which falls back to
+# InstanceProfileCredentialsProvider.getInstance() — a static singleton with async refresh disabled
+# This causes ExpiredToken errors from the repository-s3 plugin when the instance profile credentials expire after 6 hours.
+restart_source_cluster () {
+  echo "Restarting Elasticsearch on source cluster nodes to refresh AWS credentials"
+  instance_ids=($(aws ec2 describe-instances --filters "Name=tag:Name,Values=$SOURCE_INFRA_STACK_NAME/*" 'Name=instance-state-name,Values=running' --query 'Reservations[*].Instances[*].InstanceId' --output text))
+  for id in "${instance_ids[@]}"
+  do
+    echo "Restarting Elasticsearch on node: $id"
+    restart_cmd="pkill -f elasticsearch || true; sleep 5; cd /home/ec2-user/elasticsearch && sudo -u ec2-user nohup ./bin/elasticsearch >> install.log 2>&1 &"
+    command_id=$(aws ssm send-command --instance-ids "$id" --document-name "AWS-RunShellScript" --parameters commands="$restart_cmd" --output text --query 'Command.CommandId')
+    sleep 10
+    command_status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$id" --output text --query 'Status')
+    while [ "$command_status" != "Success" ] && [ "$command_status" != "Failed" ] && [ "$command_status" != "TimedOut" ]
+    do
+      echo "Waiting for ES restart command to complete, current status is $command_status"
+      sleep 10
+      command_status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$id" --output text --query 'Status')
+    done
+    echo "Restart command completed with status: $command_status"
+    if [ "$command_status" != "Success" ]; then
+      echo "Standard Error:"
+      aws --no-cli-pager ssm get-command-invocation --command-id "$command_id" --instance-id "$id" --output text --query 'StandardErrorContent'
+    fi
+  done
+
+  # Wait for Elasticsearch to become available
+  source_endpoint=$(aws cloudformation describe-stacks --stack-name "$SOURCE_INFRA_STACK_NAME" --query "Stacks[0].Outputs[?OutputKey==\`loadbalancerurl\`].OutputValue" --output text)
+  echo "Waiting for Elasticsearch to be available at $source_endpoint:9200"
+  for i in $(seq 1 30); do
+    if curl -s -o /dev/null -w "%{http_code}" "http://$source_endpoint:9200" | grep -q "200"; then
+      echo "Elasticsearch is available"
+      return 0
+    fi
+    echo "Attempt $i/30: Elasticsearch not ready yet, waiting..."
+    sleep 10
+  done
+  echo "Error: Elasticsearch did not become available after restart"
+  return 1
+}
+
 # Note: This function is still in an experimental state
 # Modify EC2 nodes to add required Kafka security group if it doesn't exist, as well as call the ./startCaptureProxy.sh
 # script on each node which will detect if ES and the Capture Proxy are running and on the correct port, and attempt
@@ -251,6 +293,9 @@ if [ "$BOOTSTRAP_REGION" = true ] ; then
 fi
 
 if [ "$SKIP_SOURCE_DEPLOY" = false ] && [ "$CLEAN_UP_ALL" = false ] ; then
+  # Restart Elasticsearch
+  restart_source_cluster
+
   # Deploy source cluster on EC2 instances
   cdk deploy "*" --c contextFile="$SOURCE_GEN_CONTEXT_FILE" --c contextId="$SOURCE_CONTEXT_ID" --require-approval never
   if [ $? -ne 0 ]; then
