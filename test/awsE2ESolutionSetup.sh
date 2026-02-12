@@ -20,8 +20,8 @@ restart_source_cluster () {
   for id in "${instance_ids[@]}"
   do
     echo "Restarting Elasticsearch on node: $id"
-    restart_cmd='["pkill -f elasticsearch || true; sleep 5; chown ec2-user:ec2-user /home/ec2-user/elasticsearch/install.log 2>/dev/null; sudo su - ec2-user -c \"cd /home/ec2-user/elasticsearch && ./bin/elasticsearch >> install.log 2>&1 & disown\""]'
-    command_id=$(aws ssm send-command --instance-ids "$id" --document-name "AWS-RunShellScript" --parameters "{\"commands\":$restart_cmd}" --output text --query 'Command.CommandId')
+    restart_cmd='["pkill -f elasticsearch || true; sleep 5; chown ec2-user:ec2-user /home/ec2-user/elasticsearch/install.log 2>/dev/null; nohup sudo -u ec2-user sh -c \"cd /home/ec2-user/elasticsearch && ./bin/elasticsearch >> install.log 2>&1\" > /dev/null 2>&1 &"]'
+    command_id=$(aws ssm send-command --instance-ids "$id" --document-name "AWS-RunShellScript" --parameters "{\"commands\":$restart_cmd,\"executionTimeout\":[\"60\"]}" --output text --query 'Command.CommandId')
     sleep 10
     command_status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$id" --output text --query 'Status')
     while [ "$command_status" != "Success" ] && [ "$command_status" != "Failed" ] && [ "$command_status" != "TimedOut" ]
@@ -31,25 +31,11 @@ restart_source_cluster () {
       command_status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$id" --output text --query 'Status')
     done
     echo "Restart command completed with status: $command_status"
-    if [ "$command_status" != "Success" ]; then
+    if [ "$command_status" = "Failed" ]; then
       echo "Standard Error:"
       aws --no-cli-pager ssm get-command-invocation --command-id "$command_id" --instance-id "$id" --output text --query 'StandardErrorContent'
     fi
   done
-
-  # Wait for Elasticsearch to become available
-  source_endpoint=$(aws cloudformation describe-stacks --stack-name "$SOURCE_INFRA_STACK_NAME" --query "Stacks[0].Outputs[?OutputKey==\`loadbalancerurl\`].OutputValue" --output text)
-  echo "Waiting for Elasticsearch to be available at $source_endpoint:9200"
-  for i in $(seq 1 30); do
-    if curl -s -o /dev/null -w "%{http_code}" "http://$source_endpoint:9200" | grep -q "200"; then
-      echo "Elasticsearch is available"
-      return 0
-    fi
-    echo "Attempt $i/30: Elasticsearch not ready yet, waiting..."
-    sleep 10
-  done
-  echo "Error: Elasticsearch did not become available after restart"
-  return 1
 }
 
 # Note: This function is still in an experimental state
