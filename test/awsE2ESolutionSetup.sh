@@ -20,7 +20,7 @@ restart_source_cluster () {
   for id in "${instance_ids[@]}"
   do
     echo "Restarting Elasticsearch on node: $id"
-    restart_cmd="pkill -f elasticsearch || true; sleep 5; cd /home/ec2-user/elasticsearch && sudo -u ec2-user nohup ./bin/elasticsearch >> install.log 2>&1 &"
+    restart_cmd="pkill -f elasticsearch || true; sleep 5; cd /home/ec2-user/elasticsearch && sudo -u ec2-user bash -c './bin/elasticsearch >> install.log 2>&1 & disown'"
     command_id=$(aws ssm send-command --instance-ids "$id" --document-name "AWS-RunShellScript" --parameters commands="$restart_cmd" --output text --query 'Command.CommandId')
     sleep 10
     command_status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$id" --output text --query 'Status')
