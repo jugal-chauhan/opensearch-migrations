@@ -119,7 +119,6 @@ public class RfsOpenSearchCoordinatorOutageTest extends SourceTestBase {
     }
 
     @Test
-    @Disabled("Known limitation: current coordinator retry window is shorter than long restart duration")
     @SneakyThrows
     void allDocsMigratedButCoordinatorLongRestartsAtCompletion() {
         var result = runCoordinatorOutageScenario(true, COORDINATOR_REENABLE_AFTER_SECONDS);
