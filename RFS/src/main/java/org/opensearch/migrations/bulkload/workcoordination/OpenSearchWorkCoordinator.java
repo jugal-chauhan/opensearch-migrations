@@ -45,7 +45,8 @@ public abstract class OpenSearchWorkCoordinator implements IWorkCoordinator {
     static final int MAX_CREATE_SUCCESSOR_WORK_ITEMS_RETRIES = 10;
     static final int CREATE_SUCCESSOR_WORK_ITEMS_RETRY_BASE_MS = 10; // last delay before failure: 10 seconds
     static final int MAX_CREATE_UNASSIGNED_SUCCESSOR_WORK_ITEM_RETRIES = 7; // last delay before failure: 1.2 seconds
-    static final int MAX_MARK_AS_COMPLETED_RETRIES = 7; // last delay before failure: 1.2 seconds
+    static final int MAX_MARK_AS_COMPLETED_RETRIES = 7; // last delay before failure: ~64 seconds, total window: ~127 seconds
+    static final int MARK_AS_COMPLETED_RETRY_BASE_MS = 1000;
 
 
     public static final String SCRIPT_VERSION_TEMPLATE = "{SCRIPT_VERSION}";
@@ -446,7 +447,7 @@ public abstract class OpenSearchWorkCoordinator implements IWorkCoordinator {
             retryWithExponentialBackoff(
                 () -> completeWorkItemWithoutRetry(workItemId, contextSupplier),
                 MAX_MARK_AS_COMPLETED_RETRIES,
-                CREATE_SUCCESSOR_WORK_ITEMS_RETRY_BASE_MS,
+                MARK_AS_COMPLETED_RETRY_BASE_MS,
                 ignored -> {}
             );
     }
@@ -907,7 +908,7 @@ public abstract class OpenSearchWorkCoordinator implements IWorkCoordinator {
             retryWithExponentialBackoff(
                     () -> completeWorkItemWithoutRetry(workItemId, ctx::getCompleteWorkItemContext),
                     MAX_MARK_AS_COMPLETED_RETRIES,
-                    CREATE_SUCCESSOR_WORK_ITEMS_RETRY_BASE_MS,
+                    MARK_AS_COMPLETED_RETRY_BASE_MS,
                     e -> ctx.addTraceException(e, true)
             );
         }
