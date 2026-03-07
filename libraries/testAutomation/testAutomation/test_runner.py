@@ -480,6 +480,7 @@ def main() -> None:
         skip_delete = True
         keep_workflows = True
         reuse_clusters = True
+        test_runner.skip_install = True
     if len(combinations) > 1 and (skip_delete or reuse_clusters):
         logger.warning("Disabling the --skip-delete and --reuse-clusters options, as they cannot be used with more "
                        "than one version combination")

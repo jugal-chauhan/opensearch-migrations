@@ -42,13 +42,25 @@ pipenv run app --test-ids=0001 --source-version=ES_7.10 --target-version=OS_2.19
 pipenv run app --test-ids=0001,0004 --source-version=ES_7.10 --target-version=OS_2.19
 ```
 
+## Running after `localTesting.sh`
+
+If you've already deployed the environment with `deployment/k8s/localTesting.sh`, you must pass `--registry-prefix` pointing to the minikube registry so the test runner uses the locally-built images:
+
+```bash
+pipenv run app --dev --source-version=ES_7.10 --target-version=OS_2.19 --test-ids=0001 \
+  --registry-prefix="$(minikube ip):30500/"
+```
+
+Without `--registry-prefix`, the default `valuesForLocalK8s.yaml` uses `localhost:5000` which is not reachable from inside minikube.
+
 ## Development Mode
 
-The `--dev` flag combines options for fast iteration: `--skip-delete`, `--reuse-clusters`, `--keep-workflows`.
+The `--dev` flag combines options for fast iteration: `--skip-delete`, `--reuse-clusters`, `--keep-workflows`, `--skip-install`.
 
 ```bash
 # First run - deploys Helm chart and creates clusters
-pipenv run app --dev --source-version=ES_7.10 --target-version=OS_2.19 --test-ids=0001
+pipenv run app --skip-delete --keep-workflows --source-version=ES_7.10 --target-version=OS_2.19 --test-ids=0001 \
+  --registry-prefix="$(minikube ip):30500/"
 
 # Subsequent runs - reuses existing deployment and clusters
 pipenv run app --dev --source-version=ES_7.10 --target-version=OS_2.19 --test-ids=0001
