@@ -45,6 +45,10 @@ class TestTreeFiltering:
     def test_meaningful_vs_noise(self, input_dir, expected_dir):
         """Test filtering meaningful containers vs noise wrappers."""
         self._test_filtering('meaningful_vs_noise.json', input_dir, expected_dir)
+
+    def test_retry_resource_template(self, input_dir, expected_dir):
+        """Test that Retry nodes from retryStrategy are removed but Pod children (each attempt) are lifted."""
+        self._test_filtering('retry_resource_template.json', input_dir, expected_dir)
     
     def _test_filtering(self, filename, input_dir, expected_dir):
         """Test filtering for a specific file."""

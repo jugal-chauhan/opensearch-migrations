@@ -1,0 +1,52 @@
+[
+  {
+    "id": "steps-root",
+    "display_name": "createRfsCoordinator",
+    "phase": "Succeeded",
+    "type": "Steps",
+    "boundary_id": null,
+    "inputs": {},
+    "children": [
+      {
+        "id": "group1",
+        "display_name": "Start RFS OpenSearch cluster",
+        "phase": "Succeeded",
+        "type": "StepGroup",
+        "boundary_id": "steps-root",
+        "inputs": {
+          "parameters": [
+            {"name": "groupName", "value": "Start RFS OpenSearch cluster"}
+          ]
+        },
+        "children": [
+          {
+            "id": "retry1",
+            "display_name": "createRfsCoordinatorStatefulSet",
+            "phase": "Succeeded",
+            "type": "Retry",
+            "boundary_id": "steps-root",
+            "inputs": {},
+            "children": [
+              {
+                "id": "attempt0",
+                "display_name": "createRfsCoordinatorStatefulSet(0)",
+                "phase": "Failed",
+                "type": "Pod",
+                "boundary_id": "steps-root",
+                "children": []
+              },
+              {
+                "id": "attempt1",
+                "display_name": "createRfsCoordinatorStatefulSet(1)",
+                "phase": "Succeeded",
+                "type": "Pod",
+                "boundary_id": "steps-root",
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
