@@ -1,0 +1,12 @@
+*.js
+*.d.ts
+node_modules
+cdk.out
+.DS_Store
+cdk-outputs.json
+
+# cdk.json is per-deployer and contains real env values. cdk.json.template is committed
+# as the reference shape; scripts/discover-ma-context.sh produces the real cdk.json.
+cdk.json
+# CDK auto-managed context cache (CDK writes lookups into this file).
+cdk.context.json

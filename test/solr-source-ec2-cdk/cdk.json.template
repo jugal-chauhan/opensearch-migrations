@@ -1,0 +1,23 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/solr-source-ec2.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": ["README.md", "cdk*.json", "**/*.d.ts", "**/*.js", "tsconfig.json", "package*.json", "node_modules"]
+  },
+  "context": {
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+
+    "_comment": "Required values are placeholders — fill in via `scripts/discover-ma-context.sh <eks-cluster-name>` or override with `--context k=v` on the CLI. The `bin/` entrypoint rejects REPLACE_ME placeholders so a forgotten value fails fast, not silently.",
+
+    "stage": "REPLACE_ME-stage-name",
+    "vpcId": "REPLACE_ME-vpc-id",
+    "privateSubnetIds": "REPLACE_ME-subnet-id-az-a,REPLACE_ME-subnet-id-az-b",
+    "availabilityZones": "REPLACE_ME-az-a,REPLACE_ME-az-b",
+    "eksNodeSecurityGroupId": "REPLACE_ME-eks-node-sg-id",
+    "s3BucketName": "REPLACE_ME-migrations-default-bucket",
+
+    "s3Prefix": "solr-aoss-ec2",
+    "instanceType": "t3.medium",
+    "solrImage": "solr:8.11.4"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "solr-source-ec2-cdk",
+  "version": "0.1.0",
+  "description": "CDK app to provision Solr 8.11.4 on a single EC2 in MA's VPC for Solr-to-AOSS migration POC",
+  "private": true,
+  "bin": {
+    "solr-source-ec2": "bin/solr-source-ec2.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --require-approval never",
+    "destroy": "cdk destroy --force"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "aws-cdk": "^2.150.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0"
+  }
+}

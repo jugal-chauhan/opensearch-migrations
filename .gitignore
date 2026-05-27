@@ -55,3 +55,7 @@ frontend/
 deployment/k8s/aws/dist/
 .scannerwork/
 .sisyphus/
+
+# Allow this CDK app's bin/ entrypoint (the broad **/bin/ rule above is for build output)
+!test/solr-source-ec2-cdk/bin/
+!test/solr-source-ec2-cdk/bin/**
