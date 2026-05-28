@@ -84,7 +84,7 @@ ExecStart=/usr/bin/docker run --rm --name solr \
   -e ZK_CREATE_CHROOT=true \
   -e S3_BUCKET_NAME=__S3_BUCKET__ \
   -e S3_REGION=__S3_REGION__ \
-  -v /opt/solr-config/solr.xml:/opt/solr/server/solr/solr.xml:ro \
+  -v /opt/solr-config/solr.xml:/var/solr/data/solr.xml:ro \
   __SOLR_IMAGE__ \
   solr-fg -force -cloud -DzkRun
 ExecStop=/usr/bin/docker stop -t 30 solr
