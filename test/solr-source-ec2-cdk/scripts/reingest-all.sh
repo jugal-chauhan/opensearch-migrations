@@ -43,10 +43,9 @@
 # Debugging a failed step
 # -----------------------
 # Most steps redirect curl's stdout to /dev/null to keep success output quiet.
-# `--fail-with-body` prints the response body to stdout on HTTP error, so when
-# a step fails the body is also discarded and you only see the "abort" line.
-# To see Solr's actual error response, comment out `>/dev/null` on the failing
-# line, re-run the script, and the JSON error will print.
+# `--fail` causes curl to exit non-zero on HTTP errors but discards the body.
+# To see Solr's actual error response when a step fails, comment out `>/dev/null`
+# AND remove `--fail` from the `solr_curl` wrapper, then re-run the failing line.
 #
 set -euo pipefail
 
@@ -61,10 +60,13 @@ EXPECTED_TECHPRODUCTS_DOCS=46
 EXPECTED_FILMS_DOCS=1100
 
 log()   { printf '\n[reingest %s] %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
-abort() { printf '\n[reingest ERROR] %s\n' "$*" >&2; exit "${2:-1}"; }
+abort() { printf '\n[reingest ERROR] %s\n' "$1" >&2; exit "${2:-1}"; }
 
-# Wrapper so curl errors don't get swallowed (curl -s hides connection errors)
-solr_curl() { docker exec "$SOLR_CONTAINER" curl -sS --fail-with-body "$@"; }
+# Wrapper so curl errors don't get swallowed (curl -s hides connection errors).
+# --fail (not --fail-with-body) for compatibility with curl < 7.76 inside the
+# Solr 8.11.4 image (ships curl 7.68). Trade-off: response body is discarded
+# on HTTP failures, but exit code propagation still works.
+solr_curl() { docker exec "$SOLR_CONTAINER" curl -sS --fail "$@"; }
 
 # ---------------------------------------------------------------------------
 # Preconditions
